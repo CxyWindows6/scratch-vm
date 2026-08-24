@@ -315,6 +315,14 @@ class VirtualMachine extends EventEmitter {
         this.runtime.setFramerate(framerate);
     }
 
+    setOpsPerFrame (opsPerFrame) {
+        this.runtime.setOpsPerFrame(opsPerFrame);
+    }
+
+    getOpsPerFrame () {
+        return this.runtime.getOpsPerFrame();
+    }
+
     setInterpolation (interpolationEnabled) {
         this.runtime.setInterpolation(interpolationEnabled);
     }

@@ -312,6 +312,8 @@ class Runtime extends EventEmitter {
          * @type {boolean}
          */
         this._refreshTargets = false;
+        this._pendingTargetsUpdate = false;
+        this._pendingMonitorsUpdate = false;
 
         /**
          * Map to look up all monitor block information by opcode.
@@ -636,6 +638,14 @@ class Runtime extends EventEmitter {
      */
     static get FRAMERATE_CHANGED () {
         return 'FRAMERATE_CHANGED';
+    }
+
+    /**
+     * Event name for ops-per-frame changing.
+     * @const {string}
+     */
+    static get OPSPERFRAME_CHANGED () {
+        return 'OPSPERFRAME_CHANGED';
     }
 
     /**
@@ -2520,8 +2530,15 @@ class Runtime extends EventEmitter {
             this.profiler.start(stepProfilerId);
         }
 
-        // Clean up threads that were told to stop during or since the last step
-        this.threads = this.threads.filter(thread => !thread.isKilled);
+        // Clean up killed threads in place to avoid allocating a new array each frame
+        let activeThreadCount = 0;
+        for (let i = 0; i < this.threads.length; i++) {
+            const thread = this.threads[i];
+            if (!thread.isKilled) {
+                this.threads[activeThreadCount++] = thread;
+            }
+        }
+        this.threads.length = activeThreadCount;
         this.updateThreadMap();
 
         // Find all edge-activated hats, and add them to threads to be evaluated.
@@ -2555,7 +2572,8 @@ class Runtime extends EventEmitter {
         // Store threads that completed this iteration for testing and other
         // internal purposes.
         this._lastStepDoneThreads = doneThreads;
-        if (this.renderer) {
+        /* rendering is now handled by tw-frame-loop.js renderCallback (RAF) */
+        /*if (this.renderer) {
             // @todo: Only render when this.redrawRequested or clones rendered.
             if (this.profiler !== null) {
                 if (rendererDrawProfilerId === -1) {
@@ -2572,15 +2590,15 @@ class Runtime extends EventEmitter {
             if (this.profiler !== null) {
                 this.profiler.stop();
             }
-        }
+        }*/
 
         if (this._refreshTargets) {
-            this.emit(Runtime.TARGETS_UPDATE, false /* Don't emit project changed */);
+            this._pendingTargetsUpdate = true;
             this._refreshTargets = false;
         }
 
         if (this._monitorState.dirty) {
-            this.emit(Runtime.MONITORS_UPDATE, this._monitorState.shallowClone());
+            this._pendingMonitorsUpdate = true;
             this._monitorState.dirty = false;
         }
 
@@ -2591,6 +2609,23 @@ class Runtime extends EventEmitter {
 
         if (this.interpolationEnabled) {
             this._lastStepTime = Date.now();
+        }
+    }
+
+    /**
+     * Flush pending frame events (targets update, monitors update).
+     * Called from tw-frame-loop.js renderCallback at RAF rate (~60Hz)
+     * to avoid emitting at step rate (4000+ Hz) and blocking the step loop.
+     */
+    flushFrameEvents () {
+        if (this._pendingTargetsUpdate) {
+            this._pendingTargetsUpdate = false;
+            this.emit(Runtime.TARGETS_UPDATE, false /* Don't emit project changed */);
+        }
+        if (this._pendingMonitorsUpdate) {
+            this._pendingMonitorsUpdate = false;
+            const state = this._monitorState.shallowClone();
+            this.emit(Runtime.MONITORS_UPDATE, state);
         }
     }
 
@@ -2654,14 +2689,29 @@ class Runtime extends EventEmitter {
      * @param {number} framerate Target frames per second
      */
     setFramerate (framerate) {
-        // Setting framerate to anything greater than this is unnecessary and can break the sequencer
-        // Additionally, the JS spec says intervals can't run more than once every 4ms (250/s) anyways
-        if (framerate > 250) framerate = 250;
         // Convert negative framerates to 1FPS
         // Note that 0 is a special value which means "matching device screen refresh rate"
         if (framerate < 0) framerate = 1;
         this.frameLoop.setFramerate(framerate);
         this.emit(Runtime.FRAMERATE_CHANGED, framerate);
+    }
+
+    /**
+     * tw: Change operations (step calls) per frame
+     * @param {number} opsPerFrame Target operations per frame
+     */
+    setOpsPerFrame (opsPerFrame) {
+        if (opsPerFrame < 0) opsPerFrame = 1;
+        this.frameLoop.setOpsPerFrame(opsPerFrame);
+        this.emit(Runtime.OPSPERFRAME_CHANGED, opsPerFrame);
+    }
+
+    /**
+     * tw: Get operations per frame
+     * @return {number} Current operations per frame
+     */
+    getOpsPerFrame () {
+        return this.frameLoop.opsPerFrame;
     }
 
     /**
@@ -2960,25 +3010,17 @@ class Runtime extends EventEmitter {
      * @param {Array.<Thread>=} optExtraThreads Optional list of inactive threads.
      */
     _updateGlows (optExtraThreads) {
-        const searchThreads = [];
-        searchThreads.push(...this.threads);
-        if (optExtraThreads) {
-            searchThreads.push(...optExtraThreads);
-        }
-        // Set of scripts that request a glow this frame.
+        // Use Set for O(1) lookup instead of Array.indexOf O(n)
         const requestedGlowsThisFrame = [];
-        // Final set of scripts glowing during this frame.
-        const finalScriptGlows = [];
-        // Find all scripts that should be glowing.
-        for (let i = 0; i < searchThreads.length; i++) {
-            const thread = searchThreads[i];
+        // Collect glows from all threads without concatenating arrays
+        for (let i = 0; i < this.threads.length; i++) {
+            const thread = this.threads[i];
             const target = thread.target;
             if (target === this._editingTarget) {
                 const blockForThread = thread.blockGlowInFrame;
                 if (thread.requestScriptGlowInFrame || thread.stackClick) {
                     let script = target.blocks.getTopLevelScript(blockForThread);
                     if (!script) {
-                        // Attempt to find in flyout blocks.
                         script = this.flyoutBlocks.getTopLevelScript(
                             blockForThread
                         );
@@ -2989,21 +3031,42 @@ class Runtime extends EventEmitter {
                 }
             }
         }
-        // Compare to previous frame.
+        if (optExtraThreads) {
+            for (let i = 0; i < optExtraThreads.length; i++) {
+                const thread = optExtraThreads[i];
+                const target = thread.target;
+                if (target === this._editingTarget) {
+                    const blockForThread = thread.blockGlowInFrame;
+                    if (thread.requestScriptGlowInFrame || thread.stackClick) {
+                        let script = target.blocks.getTopLevelScript(blockForThread);
+                        if (!script) {
+                            script = this.flyoutBlocks.getTopLevelScript(
+                                blockForThread
+                            );
+                        }
+                        if (script) {
+                            requestedGlowsThisFrame.push(script);
+                        }
+                    }
+                }
+            }
+        }
+        const requestedGlowSet = new Set(requestedGlowsThisFrame);
+        const previousGlowSet = new Set(this._scriptGlowsPreviousFrame);
+        const finalScriptGlows = [];
+        // Glows turned off: in previous but not in requested
         for (let j = 0; j < this._scriptGlowsPreviousFrame.length; j++) {
             const previousFrameGlow = this._scriptGlowsPreviousFrame[j];
-            if (requestedGlowsThisFrame.indexOf(previousFrameGlow) < 0) {
-                // Glow turned off.
+            if (!requestedGlowSet.has(previousFrameGlow)) {
                 this.glowScript(previousFrameGlow, false);
             } else {
-                // Still glowing.
                 finalScriptGlows.push(previousFrameGlow);
             }
         }
+        // Glows turned on: in requested but not in previous
         for (let k = 0; k < requestedGlowsThisFrame.length; k++) {
             const currentFrameGlow = requestedGlowsThisFrame[k];
-            if (this._scriptGlowsPreviousFrame.indexOf(currentFrameGlow) < 0) {
-                // Glow turned on.
+            if (!previousGlowSet.has(currentFrameGlow)) {
                 this.glowScript(currentFrameGlow, true);
                 finalScriptGlows.push(currentFrameGlow);
             }

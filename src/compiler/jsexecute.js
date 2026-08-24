@@ -374,7 +374,7 @@ runtimeFunctions.timer = `const timer = () => {
  */
 // Date.UTC(2000, 0, 1) === 946684800000
 // Hardcoding it is marginally faster
-runtimeFunctions.daysSince2000 = `const daysSince2000 = () => (Date.now() - 946684800000) / (24 * 60 * 60 * 1000)`;
+runtimeFunctions.daysSince2000 = `const daysSince2000 = () => (Date.now() - 946684800000) / 86400000`;
 
 /**
  * Determine distance to a sprite or point.
@@ -502,9 +502,9 @@ runtimeFunctions.listDelete = `const listDelete = (list, idx) => {
  * @returns {boolean} True if the list contains the item
  */
 runtimeFunctions.listContains = `const listContains = (list, item) => {
-    // TODO: evaluate whether indexOf is worthwhile here
-    if (list.value.indexOf(item) !== -1) {
-        return true;
+    const t = typeof item;
+    if (t === 'number' || t === 'string') {
+        if (list.value.indexOf(item) !== -1) return true;
     }
     for (let i = 0; i < list.value.length; i++) {
         if (compareEqual(list.value[i], item)) {
@@ -521,6 +521,11 @@ runtimeFunctions.listContains = `const listContains = (list, item) => {
  * @returns {number} The 1-indexed index of the item in the list, otherwise 0
  */
 runtimeFunctions.listIndexOf = `const listIndexOf = (list, item) => {
+    const t = typeof item;
+    if (t === 'number' || t === 'string') {
+        const idx = list.value.indexOf(item);
+        if (idx !== -1) return idx + 1;
+    }
     for (let i = 0; i < list.value.length; i++) {
         if (compareEqual(list.value[i], item)) {
             return i + 1;
