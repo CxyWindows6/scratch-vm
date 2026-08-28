@@ -125,3 +125,21 @@
 | smoke | — | `node -e require('./src/index.js')` 通过 |
 
 > `execute.js` 原先的"1 个失败"是 tap 对**文件级 30s 超时**（90 fixture × 2 模式 > 30s），非用例失败；`tw_rejected_promise.js` 在整套件高负载下出现过 1 次微任务时序抖动，5 次隔离 + 最终全套件复跑均通过，与本次改动无关（该测试不启动 frame loop）。
+
+---
+
+## 五、浏览器渲染卡顿（掉帧）修复 —— 第二轮反馈
+
+**现象**：对比原版 TurboWarp，本 VM 在浏览器里严重卡顿掉帧。步进调度修复后与上游一致（普通 setInterval、每 tick 1 步，无追赶批量），差异在**渲染门控**：
+
+```js
+// 旧门控：elapsed 时间阈值
+renderTime - this._lastRenderTime >= this.runtime.currentStepTime
+```
+
+**机制（拍频塌缩）**：60Hz 显示器实际 vsync 周期 ≈16.63ms，略小于 `currentStepTime`=16.667ms → 每个vsync 的 elapsed 恒差一点 → **确定性地每两个 vsync 才画一次 ≈30fps**（120/144Hz 下呈不规则图案）。数值仿真：60Hz 下旧门控仅 38-48 draws/s，新门控恢复 ~60。
+
+**修复**（`tw-frame-loop.js`）：渲染 RAF 改为**按"是否有新模拟状态"绘制**——`stepCallback` 累加 `_stepsSinceRender`，`renderCallback` 在 `_stepsSinceRender > 0` 时绘制并清零（保留绘制与步进解耦的架构意图；插值模式与 0-FPS 模式不变）。
+
+**验证**：Node 挂假 renderer 实测 `draws/steps = 0.99`（每个新状态恰好一画）；eslint 0 错误；execute.js 224/224（stepping 未动）；unit 96/96。
+附注：上游 TW 在 Chromium+Windows 上另有空转 RAF 做帧节奏补偿（TW #257）——本架构的渲染 RAF 常驻，等效满足该条件，未重复添加。

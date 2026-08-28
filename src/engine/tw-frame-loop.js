@@ -40,6 +40,7 @@ class FrameLoop {
         this._lastRenderTime = 0;
         this._lastStepTime = 0;
         this._accumulator = 0;
+        this._stepsSinceRender = 0;
         this._stepInterval = null;
         this._renderInterval = null;
     }
@@ -108,6 +109,13 @@ class FrameLoop {
         for (let i = 0; i < stepsToRun; i++) {
             this.runtime._step();
         }
+        // tw: simulation state advanced, so the next vsync has something new to draw.
+        // The render loop draws only when this counter is nonzero: this keeps rendering
+        // decoupled from step scheduling without the old elapsed-time gate, which beat
+        // against display vsync (RAF period is usually a hair under currentStepTime, so
+        // "elapsed >= currentStepTime" deterministically skipped every other vsync and
+        // collapsed the draw rate to roughly half the display refresh rate).
+        this._stepsSinceRender += stepsToRun;
     }
 
     renderCallback () {
@@ -122,7 +130,7 @@ class FrameLoop {
             this.runtime.flushFrameEvents();
         } else if (
             this.framerate === 0 ||
-            renderTime - this._lastRenderTime >= this.runtime.currentStepTime
+            this._stepsSinceRender > 0
         ) {
             if (this.runtime.profiler !== null) {
                 if (rendererDrawProfilerId === -1) {
@@ -142,6 +150,7 @@ class FrameLoop {
                 this.runtime.currentStepTime = this.runtime.screenRefreshTime;
             }
             this.runtime.flushFrameEvents();
+            this._stepsSinceRender = 0;
         }
     }
 
@@ -160,6 +169,7 @@ class FrameLoop {
         this._lastStepTime = now;
         this._lastRenderTime = now;
         this._accumulator = 0;
+        this._stepsSinceRender = 0;
         if (this.framerate === 0) {
             this._stepInterval = this._renderInterval = taskWrapper(
                 (() => {
