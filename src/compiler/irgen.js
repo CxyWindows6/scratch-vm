@@ -85,18 +85,10 @@ class ScriptTreeGenerator {
 
         this.usesTimer = false;
 
-        this.namesOfCostumesAndSounds = new Set();
-        for (const target of this.runtime.targets) {
-            if (target.isOriginal) {
-                const sprite = target.sprite;
-                for (const costume of sprite.costumes) {
-                    this.namesOfCostumesAndSounds.add(costume.name);
-                }
-                for (const sound of sprite.sounds) {
-                    this.namesOfCostumesAndSounds.add(sound.name);
-                }
-            }
-        }
+        // Reuse the runtime-level cache of costume/sound names, which is only
+        // invalidated when targets or assets change, instead of rebuilding the
+        // set on every ScriptTreeGenerator construction.
+        this.namesOfCostumesAndSounds = this.runtime.getNamesOfCostumesAndSounds();
 
         this.oldCompilerStub = (
             oldCompilerCompatiblity.enabled ?

@@ -196,12 +196,6 @@ let stepProfilerId = -1;
 let stepThreadsProfilerId = -1;
 
 /**
- * Numeric ID for RenderWebGL.draw in Profiler instances.
- * @type {number}
- */
-let rendererDrawProfilerId = -1;
-
-/**
  * Manages targets, scripts, and the sequencer.
  * @constructor
  */
@@ -2340,6 +2334,40 @@ class Runtime extends EventEmitter {
         if (target.isStage && !this._stageTarget) {
             this._stageTarget = target;
         }
+        this.invalidateNameCache();
+    }
+
+    /**
+     * Return a set of all costume and sound names across the original
+     * (non-clone) targets. The result is cached and only recomputed when
+     * targets or their assets are added, removed, or renamed.
+     * @returns {Set<string>} Set of costume and sound names.
+     */
+    getNamesOfCostumesAndSounds () {
+        if (!this._namesOfCostumesAndSounds) {
+            const names = new Set();
+            for (const target of this.targets) {
+                if (target.isOriginal) {
+                    const sprite = target.sprite;
+                    for (const costume of sprite.costumes) {
+                        names.add(costume.name);
+                    }
+                    for (const sound of sprite.sounds) {
+                        names.add(sound.name);
+                    }
+                }
+            }
+            this._namesOfCostumesAndSounds = names;
+        }
+        return this._namesOfCostumesAndSounds;
+    }
+
+    /**
+     * Invalidate the cached set of costume and sound names. Called whenever
+     * targets or their costumes/sounds are added, removed, or renamed.
+     */
+    invalidateNameCache () {
+        this._namesOfCostumesAndSounds = null;
     }
 
     /**
@@ -2411,6 +2439,7 @@ class Runtime extends EventEmitter {
         if (this._stageTarget === disposingTarget) {
             this._stageTarget = null;
         }
+        this.invalidateNameCache();
     }
 
     /**
@@ -2532,14 +2561,20 @@ class Runtime extends EventEmitter {
 
         // Clean up killed threads in place to avoid allocating a new array each frame
         let activeThreadCount = 0;
+        let anyKilled = false;
         for (let i = 0; i < this.threads.length; i++) {
             const thread = this.threads[i];
-            if (!thread.isKilled) {
+            if (thread.isKilled) {
+                anyKilled = true;
+                this.threadMap.delete(thread.getId());
+            } else {
                 this.threads[activeThreadCount++] = thread;
             }
         }
         this.threads.length = activeThreadCount;
-        this.updateThreadMap();
+        if (anyKilled) {
+            this.updateThreadMap();
+        }
 
         // Find all edge-activated hats, and add them to threads to be evaluated.
         for (const hatType in this._hats) {
@@ -2573,7 +2608,7 @@ class Runtime extends EventEmitter {
         // internal purposes.
         this._lastStepDoneThreads = doneThreads;
         /* rendering is now handled by tw-frame-loop.js renderCallback (RAF) */
-        /*if (this.renderer) {
+        /* if (this.renderer) {
             // @todo: Only render when this.redrawRequested or clones rendered.
             if (this.profiler !== null) {
                 if (rendererDrawProfilerId === -1) {
@@ -3057,10 +3092,10 @@ class Runtime extends EventEmitter {
         // Glows turned off: in previous but not in requested
         for (let j = 0; j < this._scriptGlowsPreviousFrame.length; j++) {
             const previousFrameGlow = this._scriptGlowsPreviousFrame[j];
-            if (!requestedGlowSet.has(previousFrameGlow)) {
-                this.glowScript(previousFrameGlow, false);
-            } else {
+            if (requestedGlowSet.has(previousFrameGlow)) {
                 finalScriptGlows.push(previousFrameGlow);
+            } else {
+                this.glowScript(previousFrameGlow, false);
             }
         }
         // Glows turned on: in requested but not in previous

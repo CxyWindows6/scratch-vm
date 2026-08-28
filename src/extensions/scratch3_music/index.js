@@ -81,13 +81,43 @@ class Scratch3MusicBlocks {
          */
         this._bufferSources = [];
 
-        this._loadAllSounds();
+        /**
+         * Whether the drum and instrument samples have been requested for loading.
+         * Loading is prewarmed when the project starts, and otherwise deferred
+         * to the first play, so that samples are ready when needed.
+         * @type {boolean}
+         * @private
+         */
+        this._soundsLoadStarted = false;
 
         this._onTargetCreated = this._onTargetCreated.bind(this);
         this.runtime.on('targetWasCreated', this._onTargetCreated);
 
         this._playNoteForPicker = this._playNoteForPicker.bind(this);
         this.runtime.on('PLAY_NOTE', this._playNoteForPicker);
+
+        this._onProjectStart = this._onProjectStart.bind(this);
+        this.runtime.on('PROJECT_START', this._onProjectStart);
+    }
+
+    /**
+     * Lazily start loading the drum and instrument samples on first play.
+     * @private
+     */
+    _ensureSoundsLoaded () {
+        if (this._soundsLoadStarted) return;
+        this._soundsLoadStarted = true;
+        this._loadAllSounds();
+    }
+
+    /**
+     * Prewarm the drum and instrument samples when the project starts, so that
+     * the first drum hit, note, or music-picker preview after opening a project
+     * is audible while decoding happens ahead of time.
+     * @private
+     */
+    _onProjectStart () {
+        this._ensureSoundsLoaded();
     }
 
     /**
@@ -111,7 +141,8 @@ class Scratch3MusicBlocks {
         });
         Promise.all(loadingPromises).then(() => {
             // @TODO: Update the extension status indicator.
-        });
+        })
+            .catch(() => {});
     }
 
     /**
@@ -970,6 +1001,7 @@ class Scratch3MusicBlocks {
      * @param {object} util - utility object provided by the runtime.
      */
     _playDrumForBeats (drumNum, beats, util) {
+        this._ensureSoundsLoaded();
         if (this._stackTimerNeedsInit(util)) {
             drumNum = Cast.toNumber(drumNum);
             drumNum = Math.round(drumNum);
@@ -1091,6 +1123,7 @@ class Scratch3MusicBlocks {
      * @private
      */
     _playNote (util, note, durationSec) {
+        this._ensureSoundsLoaded();
         if (util.runtime.audioEngine === null) return;
         if (util.target.sprite.soundBank === null) return;
 

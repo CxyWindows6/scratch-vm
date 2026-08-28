@@ -32,6 +32,33 @@ const KEY_NAME = {
  */
 const KEY_NAME_SET = new Set(Object.values(KEY_NAME));
 
+/**
+ * Map from common single-character Scratch key names to their uppercase form.
+ * Used to avoid a `toUpperCase()` call for the common ASCII letter/digit cases.
+ * @type {Object.<string, string>}
+ */
+const KEY_TO_UPPER = {};
+// 'a'-'z' -> 'A'-'Z'
+for (let i = 97; i <= 122; i++) {
+    KEY_TO_UPPER[String.fromCharCode(i)] = String.fromCharCode(i - 32);
+}
+// '0'-'9' -> themselves
+for (let i = 48; i <= 57; i++) {
+    const digit = String.fromCharCode(i);
+    KEY_TO_UPPER[digit] = digit;
+}
+
+/**
+ * Convert a single character to its uppercase Scratch key form, using a lookup
+ * table for the common cases and only falling back to `toUpperCase()` on a miss.
+ * @param {string} char - a single character.
+ * @return {string} the uppercase form of the character.
+ */
+const uppercaseScratchKey = char => {
+    const mapped = KEY_TO_UPPER[char];
+    return typeof mapped === 'undefined' ? char.toUpperCase() : mapped;
+};
+
 class Keyboard {
     constructor (runtime) {
         /**
@@ -150,7 +177,7 @@ class Keyboard {
             return KEY_NAME.ESCAPE;
         }
 
-        return keyArg.toUpperCase();
+        return uppercaseScratchKey(keyArg);
     }
 
     /**
@@ -161,7 +188,7 @@ class Keyboard {
         if (!data.key) return;
         // tw: convert single letter keys to uppercase because of changes in _keyStringToScratchKey
         const scratchKeyCased = this._keyStringToScratchKey(data.key);
-        const scratchKey = scratchKeyCased.length === 1 ? scratchKeyCased.toUpperCase() : scratchKeyCased;
+        const scratchKey = scratchKeyCased.length === 1 ? uppercaseScratchKey(scratchKeyCased) : scratchKeyCased;
         if (scratchKey === '') return;
         const index = this._keysPressed.indexOf(scratchKey);
         if (data.isDown) {

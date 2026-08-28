@@ -469,6 +469,7 @@ class RenderedTarget extends Target {
         } else {
             this.sprite.addCostumeAt(costumeObject, this.sprite.costumes.length);
         }
+        this.runtime.invalidateNameCache();
     }
 
     /**
@@ -496,6 +497,7 @@ class RenderedTarget extends Target {
             this.blocks.updateAssetName(oldName, newUnusedName, 'costume');
         }
 
+        this.runtime.invalidateNameCache();
     }
 
     /**
@@ -524,6 +526,7 @@ class RenderedTarget extends Target {
         }
 
         this.runtime.requestTargetsUpdate(this);
+        this.runtime.invalidateNameCache();
         return deletedCostume;
     }
 
@@ -540,6 +543,7 @@ class RenderedTarget extends Target {
         } else {
             this.sprite.sounds.push(soundObject);
         }
+        this.runtime.invalidateNameCache();
     }
 
     /**
@@ -555,6 +559,7 @@ class RenderedTarget extends Target {
         const newUnusedName = StringUtil.unusedName(newName, usedNames);
         this.sprite.sounds[soundIndex].name = newUnusedName;
         this.blocks.updateAssetName(oldName, newUnusedName, 'sound');
+        this.runtime.invalidateNameCache();
     }
 
     /**
@@ -570,6 +575,7 @@ class RenderedTarget extends Target {
         // Delete the sound at the given index
         const deletedSound = this.sprite.sounds.splice(index, 1)[0];
         this.runtime.requestTargetsUpdate(this);
+        this.runtime.invalidateNameCache();
         return deletedSound;
     }
 

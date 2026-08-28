@@ -172,6 +172,13 @@ class GdxFor {
          */
         this._timeoutID = null;
 
+        /**
+         * Timestamp of the most recent sensor value update.
+         * @type {number}
+         * @private
+         */
+        this._lastSensorUpdate = Date.now();
+
         this.reset = this.reset.bind(this);
         this._onConnect = this._onConnect.bind(this);
     }
@@ -273,8 +280,13 @@ class GdxFor {
                         this._onSensorValueChanged(s);
                     });
                 });
+                this._lastSensorUpdate = Date.now();
                 this._timeoutID = window.setInterval(
-                    () => this._ble.handleDisconnectError(BLEDataStoppedError),
+                    () => {
+                        if (Date.now() - this._lastSensorUpdate > BLETimeout) {
+                            this._ble.handleDisconnectError(BLEDataStoppedError);
+                        }
+                    },
                     BLETimeout
                 );
             });
@@ -315,12 +327,9 @@ class GdxFor {
             this._sensors.spinSpeedZ = this._spinSpeedFromGyro(sensor.value);
             break;
         }
-        // cancel disconnect timeout and start a new one
-        window.clearInterval(this._timeoutID);
-        this._timeoutID = window.setInterval(
-            () => this._ble.handleDisconnectError(BLEDataStoppedError),
-            BLETimeout
-        );
+        // Record the most recent sensor update; the periodic timeout check
+        // reports a disconnect only once updates have stopped.
+        this._lastSensorUpdate = Date.now();
     }
 
     _spinSpeedFromGyro (val) {

@@ -620,6 +620,16 @@ class Blocks {
         this._cache._executeCached = {};
         this._cache._monitored = null;
         this._cache.scripts = {};
+        this.resetCompileCache();
+    }
+
+    /**
+     * Reset only the compilation caches (compiled scripts and procedures).
+     * This is cheaper than a full resetCache and is used by code paths that
+     * do not affect the structure or inputs of blocks, such as coordinate-only
+     * moves.
+     */
+    resetCompileCache () {
         this._cache.compiledScripts = {};
         this._cache.compiledProcedures = {};
         this._cache.proceduresPopulated = false;
@@ -807,6 +817,10 @@ class Blocks {
         // ignoring changes like routine re-positioning
         // of a block when loading a workspace
         let didChange = false;
+        // Track whether the move is a simple coordinate reposition (no change
+        // to the block's parents/connections), so we can avoid resetting the
+        // compilation caches.
+        let coordinateOnly = true;
 
         // Move coordinate changes.
         if (e.newCoordinate) {
@@ -830,6 +844,7 @@ class Blocks {
             }
             this._blocks[e.id].parent = null;
             didChange = true;
+            coordinateOnly = false;
         }
 
         // Is this block a top-level block?
@@ -863,8 +878,16 @@ class Blocks {
             }
             this._blocks[e.id].parent = e.newParent;
             didChange = true;
+            coordinateOnly = false;
         }
-        this.resetCache();
+
+        if (coordinateOnly) {
+            // A simple coordinate change does not affect compiled scripts or
+            // procedures, so only invalidate the inputs cache locally.
+            this._cache.inputs = {};
+        } else {
+            this.resetCache();
+        }
 
         if (didChange) this.emitProjectChanged();
     }
@@ -900,30 +923,46 @@ class Blocks {
      * @param {!string} blockId Id of block to delete
      */
     deleteBlock (blockId) {
+        // Delete the block and its children, then perform a single cache reset
+        // and emit a single project changed event.
+        if (this.deleteBlockInternal(blockId)) {
+            this.resetCache();
+            this.emitProjectChanged();
+        }
+    }
+
+    /**
+     * Recursively delete a block and all connected blocks without resetting
+     * caches or emitting events. Used internally so that deleting a stack only
+     * triggers one cache reset and one project changed event.
+     * @param {!string} blockId Id of block to delete
+     * @returns {boolean} True if a block was actually deleted.
+     */
+    deleteBlockInternal (blockId) {
         // @todo In runtime, stop threads running on this script.
 
         // Get block
         const block = this._blocks[blockId];
         if (!block) {
             // No block with the given ID exists
-            return;
+            return false;
         }
 
         // Delete children
         if (block.next !== null) {
-            this.deleteBlock(block.next);
+            this.deleteBlockInternal(block.next);
         }
 
         // Delete inputs (including branches)
         for (const input in block.inputs) {
             // If it's null, the block in this input moved away.
             if (block.inputs[input].block !== null) {
-                this.deleteBlock(block.inputs[input].block);
+                this.deleteBlockInternal(block.inputs[input].block);
             }
             // Delete obscured shadow blocks.
             if (block.inputs[input].shadow !== null &&
                 block.inputs[input].shadow !== block.inputs[input].block) {
-                this.deleteBlock(block.inputs[input].shadow);
+                this.deleteBlockInternal(block.inputs[input].shadow);
             }
         }
 
@@ -933,8 +972,7 @@ class Blocks {
         // Delete block itself.
         delete this._blocks[blockId];
 
-        this.resetCache();
-        this.emitProjectChanged();
+        return true;
     }
 
     /**

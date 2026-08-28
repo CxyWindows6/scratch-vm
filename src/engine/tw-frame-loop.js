@@ -27,7 +27,7 @@ const taskWrapper = (callback, requestFn, cancelFn, autoRepeat) => {
         }
     };
     id = requestFn(handle);
-    return { cancel };
+    return {cancel};
 };
 
 class FrameLoop {
@@ -78,10 +78,20 @@ class FrameLoop {
         if (stepTime === 0) {
             // 0 FPS: track screen refresh rate, 1 step per callback (multiplied by opsPerFrame)
             stepsToRun = this.opsPerFrame;
+        } else if (stepTime >= 4) {
+            // tw: at framerates the scheduler can actually hit (setInterval is clamped to ~4ms),
+            // run exactly one step per callback and discard any accumulated debt. Batching
+            // catch-up steps into the same millisecond breaks millisecond-resolution timer
+            // hats ("when timer > X" edges mis-fire when consecutive steps observe identical
+            // timestamps), which regressed the hat-thread-execution and promise-yield
+            // integration tests. This restores the upstream one-step-per-tick behavior.
+            stepsToRun = this.opsPerFrame;
+            this._accumulator = 0;
         } else {
-            // tw: time-driven accumulator. stepTime = 1000/framerate (e.g. 9876 FPS -> 0.101ms).
-            // setInterval is clamped by the browser to ~4ms (250 callbacks/s), so each callback
-            // runs multiple steps to reach the target rate: 250 * 40 ~= 10000 steps/s ~= 9876 FPS.
+            // tw: high framerate (stepTime < 4ms): time-driven accumulator batching.
+            // stepTime = 1000/framerate (e.g. 9876 FPS -> 0.101ms). setInterval is clamped by
+            // the browser to ~4ms (250 callbacks/s), so each callback runs multiple steps to
+            // reach the target rate: 250 * 40 ~= 10000 steps/s ~= 9876 FPS.
             this._accumulator += now - this._lastStepTime;
             const baseSteps = Math.floor(this._accumulator / stepTime);
             const opsPerFrame = this.opsPerFrame;

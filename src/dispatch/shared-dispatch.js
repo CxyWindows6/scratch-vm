@@ -27,12 +27,12 @@ const log = require('../util/log');
 class SharedDispatch {
     constructor () {
         /**
-         * List of callback registrations for promises waiting for a response from a call to a service on another
+         * Map of callback registrations for promises waiting for a response from a call to a service on another
          * worker. A callback registration is an array of [resolve,reject] Promise functions.
-         * Calls to local services don't enter this list.
-         * @type {Array.<Function[]>}
+         * Calls to local services don't enter this map.
+         * @type {Map<int, Function[]>}
          */
-        this.callbacks = [];
+        this.callbacks = new Map();
 
         /**
          * The next response ID to be used.
@@ -132,9 +132,13 @@ class SharedDispatch {
             // tw: upstream's logic is broken
             // Args is actually a 3 length list of [args, util, real block info]
             // We only want to send args. The others will throw errors when they try to be cloned
-            if ((args.length > 0) && (typeof args[args.length - 1].func === 'function')) {
-                args.pop();
-                args.pop();
+            try {
+                if ((args.length > 0) && (typeof args[args.length - 1].func === 'function')) {
+                    args.pop();
+                    args.pop();
+                }
+            } catch (e) {
+                // Dynamic blocks have no `func` to detect; leave args untouched.
             }
 
             if (transfer) {
@@ -154,7 +158,7 @@ class SharedDispatch {
      */
     _storeCallbacks (resolve, reject) {
         const responseId = this.nextResponseId++;
-        this.callbacks[responseId] = [resolve, reject];
+        this.callbacks.set(responseId, [resolve, reject]);
         return responseId;
     }
 
@@ -166,8 +170,8 @@ class SharedDispatch {
      */
     _deliverResponse (responseId, message) {
         try {
-            const [resolve, reject] = this.callbacks[responseId];
-            delete this.callbacks[responseId];
+            const [resolve, reject] = this.callbacks.get(responseId);
+            this.callbacks.delete(responseId);
             if (message.error) {
                 reject(message.error);
             } else {

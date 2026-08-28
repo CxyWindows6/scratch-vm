@@ -216,6 +216,12 @@ class Thread {
         this.procedures = null;
         this.executableHat = false;
         this.compatibilityStackFrame = null;
+
+        /**
+         * Cached thread ID. Computed once target+topBlock are both set.
+         * @type {?string}
+         */
+        this._id = null;
     }
 
     /**
@@ -274,7 +280,10 @@ class Thread {
     }
 
     getId () {
-        return Thread.getIdFromTargetAndBlock(this.target, this.topBlock);
+        if (this._id === null) {
+            this._id = Thread.getIdFromTargetAndBlock(this.target, this.topBlock);
+        }
+        return this._id;
     }
 
     /**

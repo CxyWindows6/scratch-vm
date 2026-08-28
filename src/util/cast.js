@@ -74,9 +74,12 @@ class Cast {
         }
         if (typeof value === 'string') {
             // These specific strings are treated as false in Scratch.
-            if ((value === '') ||
-                (value === '0') ||
-                (value.toLowerCase() === 'false')) {
+            if ((value === '') || (value === '0')) {
+                return false;
+            }
+            // Only a 5-character string can be 'false' (in any case). Try the
+            // exact common value first, then fall back to a case-insensitive check.
+            if (value.length === 5 && (value === 'false' || value.toLowerCase() === 'false')) {
                 return false;
             }
             // All other strings treated as true.
