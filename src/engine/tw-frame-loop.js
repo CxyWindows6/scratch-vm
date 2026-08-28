@@ -40,7 +40,6 @@ class FrameLoop {
         this._lastRenderTime = 0;
         this._lastStepTime = 0;
         this._accumulator = 0;
-        this._stepsSinceRender = 0;
         this._stepInterval = null;
         this._renderInterval = null;
     }
@@ -109,49 +108,59 @@ class FrameLoop {
         for (let i = 0; i < stepsToRun; i++) {
             this.runtime._step();
         }
-        // tw: simulation state advanced, so the next vsync has something new to draw.
-        // The render loop draws only when this counter is nonzero: this keeps rendering
-        // decoupled from step scheduling without the old elapsed-time gate, which beat
-        // against display vsync (RAF period is usually a hair under currentStepTime, so
-        // "elapsed >= currentStepTime" deterministically skipped every other vsync and
-        // collapsed the draw rate to roughly half the display refresh rate).
-        this._stepsSinceRender += stepsToRun;
+        // tw: render is coupled to the step cadence (upstream-style): exactly one draw per
+        // scheduler callback that advanced the simulation. Keep this here instead of in the
+        // RAF render callback: drawing from the rAF loop quantized draws onto the vsync grid
+        // while step scheduling runs on setInterval, and the phase mismatch (plus setInterval
+        // jitter) produced uneven frame pacing -> motion looked chunky/stuttery.
+        if (stepsToRun > 0) {
+            this._drawAfterStep();
+        }
+    }
+
+    _drawAfterStep () {
+        const runtime = this.runtime;
+        if (!runtime.renderer) return;
+        // Interpolation renders from the rAF callback (_renderInterpolatedPositions); drawing
+        // here too would double-render.
+        if (this.interpolation && this.framerate !== 0) return;
+        if (runtime.profiler !== null) {
+            if (rendererDrawProfilerId === -1) {
+                rendererDrawProfilerId = runtime.profiler.idByName('RenderWebGL.draw');
+            }
+            runtime.profiler.start(rendererDrawProfilerId);
+        }
+        if (typeof document === 'undefined' || !document.hidden) {
+            runtime.renderer.draw();
+        }
+        if (runtime.profiler !== null) {
+            runtime.profiler.stop();
+        }
     }
 
     renderCallback () {
-        if (!this.runtime.renderer) return;
+        const runtime = this.runtime;
         const renderTime = this.now();
         if (this.interpolation && this.framerate !== 0) {
-            if (typeof document !== 'undefined' && !document.hidden) {
-                this.runtime._renderInterpolatedPositions();
+            if (runtime.renderer && typeof document !== 'undefined' && !document.hidden) {
+                runtime._renderInterpolatedPositions();
             }
-            this.runtime.screenRefreshTime = renderTime - this._lastRenderTime;
+            runtime.screenRefreshTime = renderTime - this._lastRenderTime;
             this._lastRenderTime = renderTime;
-            this.runtime.flushFrameEvents();
-        } else if (
-            this.framerate === 0 ||
-            this._stepsSinceRender > 0
-        ) {
-            if (this.runtime.profiler !== null) {
-                if (rendererDrawProfilerId === -1) {
-                    rendererDrawProfilerId = this.runtime.profiler.idByName('RenderWebGL.draw');
-                }
-                this.runtime.profiler.start(rendererDrawProfilerId);
-            }
-            if (typeof document !== 'undefined' && !document.hidden) {
-                this.runtime.renderer.draw();
-            }
-            if (this.runtime.profiler !== null) {
-                this.runtime.profiler.stop();
-            }
-            this.runtime.screenRefreshTime = renderTime - this._lastRenderTime;
+        } else if (this.framerate === 0) {
+            // 0 FPS ("screen refresh rate"): stepCallback runs on rAF, drawing happens there
+            // via _drawAfterStep; here we just track refresh time for currentStepTime.
+            runtime.screenRefreshTime = renderTime - this._lastRenderTime;
             this._lastRenderTime = renderTime;
-            if (this.framerate === 0) {
-                this.runtime.currentStepTime = this.runtime.screenRefreshTime;
-            }
-            this.runtime.flushFrameEvents();
-            this._stepsSinceRender = 0;
+            runtime.currentStepTime = runtime.screenRefreshTime;
+        } else {
+            // Non-interpolated rendering happened in stepCallback (_drawAfterStep) on the
+            // step cadence. This rAF callback still tracks refresh time and flushes GUI
+            // frame events, but never draws (avoids double-render / uneven pacing).
+            runtime.screenRefreshTime = renderTime - this._lastRenderTime;
+            this._lastRenderTime = renderTime;
         }
+        runtime.flushFrameEvents();
     }
 
     _restart () {
@@ -169,7 +178,6 @@ class FrameLoop {
         this._lastStepTime = now;
         this._lastRenderTime = now;
         this._accumulator = 0;
-        this._stepsSinceRender = 0;
         if (this.framerate === 0) {
             this._stepInterval = this._renderInterval = taskWrapper(
                 (() => {
