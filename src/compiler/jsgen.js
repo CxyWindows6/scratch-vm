@@ -713,9 +713,26 @@ class JSGenerator {
             this.source += `listInsert(${list}, ${this.descendInput(node.index)}, ${item});\n`;
             break;
         }
-        case StackOpcode.LIST_REPLACE:
-            this.source += `listReplace(${this.referenceVariable(node.list)}, ${this.descendInput(node.index)}, ${this.descendInput(node.item)});\n`;
+        case StackOpcode.LIST_REPLACE: {
+            const list = this.referenceVariable(node.list);
+            if (node.index.isAlwaysType(InputType.NUMBER_INTERPRETABLE | InputType.NUMBER_NAN)) {
+                // Provably numeric index: inline the bounds check + store, avoiding the
+                // listReplace()/listIndex() call overhead in hot loops. Index and item are
+                // each evaluated exactly once (into temps) and item is evaluated even when
+                // out of range, matching the interpreter's input-evaluation semantics.
+                const idx = this.localVariables.next();
+                const val = this.localVariables.next();
+                this.source += `var ${idx} = ${this.descendInput(node.index.toType(InputType.NUMBER_INDEX))};\n`;
+                this.source += `var ${val} = ${this.descendInput(node.item)};\n`;
+                this.source += `if (${idx} >= 1 && ${idx} <= ${list}.value.length) {\n`;
+                this.source += `${list}.value[${idx} - 1] = ${val};\n`;
+                this.source += `${list}._monitorUpToDate = false;\n`;
+                this.source += `}\n`;
+            } else {
+                this.source += `listReplace(${list}, ${this.descendInput(node.index)}, ${this.descendInput(node.item)});\n`;
+            }
             break;
+        }
         case StackOpcode.LIST_SHOW:
             this.source += `runtime.monitorBlocks.changeBlock({ id: "${sanitize(node.list.id)}", element: "checkbox", value: true }, runtime);\n`;
             break;
