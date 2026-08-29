@@ -18,6 +18,12 @@ class TypeState {
     constructor () {
         /** @type {Object.<string, InputType | 0>}*/
         this.variables = Object.create(null);
+        /**
+         * Set of variable ids that are proven (globally) to always hold a number.
+         * Shared by reference across all states of one optimization run.
+         * @type {Set<string>|null}
+         */
+        this.numericVars = null;
     }
 
     /**
@@ -41,6 +47,7 @@ class TypeState {
      */
     clone () {
         const clone = new TypeState();
+        clone.numericVars = this.numericVars;
         for (const varId in this.variables) {
             clone.variables[varId] = this.variables[varId];
         }
@@ -124,7 +131,14 @@ class TypeState {
      * @returns {InputType}
      */
     getVariableType (variable) {
-        return this.variables[variable.id] ?? InputType.ANY;
+        const known = this.variables[variable.id];
+        if (known) return known;
+        // Unknown at this program point (e.g. right after a yield cleared the
+        // state). A globally-always-numeric variable is still a number here, so
+        // fall back to NUMBER instead of ANY; this keeps the inlined list-index
+        // and numeric-comparison fast paths alive across warp-timer yields.
+        if (this.numericVars && this.numericVars.has(variable.id)) return InputType.NUMBER;
+        return InputType.ANY;
     }
 }
 
@@ -132,12 +146,16 @@ class IROptimizer {
 
     /**
      * @param {IntermediateRepresentation} ir
+     * @param {Set<string>} [numericVars] variable ids proven to always hold a number
      */
-    constructor (ir) {
+    constructor (ir, numericVars) {
         /** @type {IntermediateRepresentation} */
         this.ir = ir;
         /** @type {boolean} Used for testing */
         this.ignoreYields = false;
+
+        /** @private @type {Set<string>|null} */
+        this.numericVars = numericVars && numericVars.size ? numericVars : null;
 
         /** @private @type {TypeState | null} The state the analyzed script could exit in */
         this.exitState = null;
@@ -809,12 +827,15 @@ class IROptimizer {
 
         this.exitState = null;
         const exitState = new TypeState();
+        exitState.numericVars = this.numericVars;
         this.analyzeStack(script.stack, exitState);
 
         this.addPossibleExitState(exitState);
         script.cachedAnalysisEndState = this.exitState;
 
-        this.optimizeStack(script.stack, new TypeState());
+        const optimizeState = new TypeState();
+        optimizeState.numericVars = this.numericVars;
+        this.optimizeStack(script.stack, optimizeState);
     }
 
     optimize () {

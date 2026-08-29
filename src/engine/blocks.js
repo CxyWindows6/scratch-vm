@@ -620,6 +620,10 @@ class Blocks {
         this._cache._executeCached = {};
         this._cache._monitored = null;
         this._cache.scripts = {};
+        // Any block edit can change the global "always numeric" variable analysis,
+        // so invalidate the runtime-level cache. (Shared runtime: an edit to any
+        // target's blocks invalidates the whole project's cached set.)
+        this.runtime._numericVarsCache = null;
         this.resetCompileCache();
     }
 

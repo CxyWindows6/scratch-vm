@@ -3,12 +3,20 @@
 const {IRGenerator} = require('./irgen');
 const {IROptimizer} = require('./iroptimizer');
 const JSGenerator = require('./jsgen');
+const {computeAlwaysNumericVariables} = require('./numeric-variables');
 
 const compile = (/** @type {import("../engine/thread")} */ thread) => {
     const irGenerator = new IRGenerator(thread);
     const ir = irGenerator.generate();
 
-    const irOptimizer = new IROptimizer(ir);
+    const runtime = thread.target.runtime;
+    let numericVars = runtime._numericVarsCache;
+    if (!numericVars) {
+        numericVars = computeAlwaysNumericVariables(runtime);
+        runtime._numericVarsCache = numericVars;
+    }
+
+    const irOptimizer = new IROptimizer(ir, numericVars);
     irOptimizer.optimize();
 
     const procedures = {};
