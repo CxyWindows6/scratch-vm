@@ -62,14 +62,21 @@ async function main () {
             global.gc();
         }
         vm.greenFlag();
+        // Measure CPU time consumed by this process, not wall time: on a busy
+        // machine other processes steal wall-clock but not our CPU cycles, so
+        // cpuUsage gives a stable signal for compute-bound A/B comparisons.
+        const cpu0 = process.cpuUsage();
         const t0 = process.hrtime.bigint();
         let steps = 0;
         while (runtime.threads.length > 0) {
             runtime._step();
             steps++;
         }
-        const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+        const wallMs = Number(process.hrtime.bigint() - t0) / 1e6;
+        const cpu = process.cpuUsage(cpu0);
+        const ms = (cpu.user + cpu.system) / 1000;
         results.push(ms);
+        if (process.env.BENCH_WALL) console.log(`  (wall ${wallMs.toFixed(1)}ms)`);
 
         const v = verify();
         console.log(`run ${r + 1}: ${ms.toFixed(1)}ms steps=${steps} len=${v.len} mismatches=${v.bad} first=${v.first} last=${v.last}`);
