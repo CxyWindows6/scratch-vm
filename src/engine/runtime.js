@@ -2429,13 +2429,15 @@ class Runtime extends EventEmitter {
      * @param {!Target} disposingTarget Target to dispose of.
      */
     disposeTarget (disposingTarget) {
-        this.targets = this.targets.filter(target => {
-            if (disposingTarget !== target) return true;
+        // In-place removal: filter() allocated a fresh array on every dispose,
+        // which is O(targets) garbage for clone storms.
+        const index = this.targets.indexOf(disposingTarget);
+        if (index !== -1) {
             // Allow target to do dispose actions.
-            target.dispose();
+            disposingTarget.dispose();
             // Remove from list of targets.
-            return false;
-        });
+            this.targets.splice(index, 1);
+        }
         if (this._stageTarget === disposingTarget) {
             this._stageTarget = null;
         }

@@ -107,8 +107,9 @@ class Sprite {
      * @returns {!RenderedTarget} Newly created clone.
      */
     createClone (optLayerGroup) {
-        const newClone = new RenderedTarget(this, this.runtime);
-        newClone.isOriginal = this.clones.length === 0;
+        const isClone = this.clones.length > 0;
+        const newClone = new RenderedTarget(this, this.runtime, isClone);
+        newClone.isOriginal = !isClone;
         this.clones.push(newClone);
         newClone.initAudio();
         if (newClone.isOriginal) {

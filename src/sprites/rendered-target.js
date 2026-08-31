@@ -12,10 +12,11 @@ class RenderedTarget extends Target {
     /**
      * @param {!Sprite} sprite Reference to the parent sprite.
      * @param {Runtime} runtime Reference to the runtime.
+     * @param {boolean=} fastId True for clones (process-unique ID is enough).
      * @constructor
      */
-    constructor (sprite, runtime) {
-        super(runtime, sprite.blocks);
+    constructor (sprite, runtime, fastId) {
+        super(runtime, sprite.blocks, fastId);
 
         /**
          * Reference to the sprite that this is a render of.

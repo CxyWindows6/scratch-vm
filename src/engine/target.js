@@ -19,9 +19,11 @@ class Target extends EventEmitter {
     /**
      * @param {Runtime} runtime Reference to the runtime.
      * @param {?Blocks} blocks Blocks instance for the blocks owned by this target.
+     * @param {boolean=} fastId True when the target only needs a process-unique
+     *   ID (clones). Avoids the crypto RNG in uid() on hot clone paths.
      * @constructor
      */
-    constructor (runtime, blocks) {
+    constructor (runtime, blocks, fastId) {
         super();
 
         if (!blocks) {
@@ -37,7 +39,7 @@ class Target extends EventEmitter {
          * A unique ID for this target.
          * @type {string}
          */
-        this.id = uid();
+        this.id = fastId ? uid.fast() : uid();
         /**
          * Blocks run as code for this target.
          * @type {!Blocks}

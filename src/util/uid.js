@@ -22,6 +22,13 @@ const cryptoObject = (typeof globalThis !== 'undefined' && globalThis.crypto &&
     typeof globalThis.crypto.getRandomValues === 'function') ? globalThis.crypto : null;
 
 /**
+ * Monotonic counter backing uid.fast().
+ * @type {number}
+ * @private
+ */
+let fastCounter = 0;
+
+/**
  * Generate a unique ID, from Blockly.  This should be globally unique.
  * 87 characters ^ 20 length > 128 bits (better than a UUID).
  * @return {string} A globally unique ID string.
@@ -41,6 +48,21 @@ const uid = function () {
         id[i] = soup_.charAt(Math.random() * soupLength);
     }
     return id.join('');
+};
+
+/**
+ * Generate a unique ID for objects that only need to be unique within this
+ * process (e.g. clone targets, which are never serialized).
+ *
+ * Avoids the cryptographic random source used by uid(), which costs several
+ * microseconds per call and dominates clone-heavy projects. The '$' character
+ * is deliberately excluded from soup_ above, so fast IDs can never collide
+ * with regular uid() values; the random suffix keeps them distinct from any
+ * hand-crafted 'clone$...' IDs.
+ * @return {string} A process-unique ID string.
+ */
+uid.fast = function () {
+    return `clone$${(++fastCounter).toString(36)}$${Math.floor(Math.random() * 0x100000000).toString(36)}`;
 };
 
 module.exports = uid;
