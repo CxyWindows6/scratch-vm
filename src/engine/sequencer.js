@@ -201,6 +201,8 @@ class Sequencer {
                 // This will start counting the thread toward `Sequencer.WARP_TIME`.
                 thread.warpTimer = new Timer();
                 thread.warpTimer.start();
+                thread.warpCheckCount = 0;
+                thread.warpNearDeadline = false;
             }
             // Execute the current block.
             if (this.runtime.profiler !== null) {
@@ -223,7 +225,7 @@ class Sequencer {
                 thread.status = Thread.STATUS_RUNNING;
                 // In warp mode, yielded blocks are re-executed immediately.
                 if (isWarpMode &&
-                    thread.warpTimer.timeElapsed() <= Sequencer.WARP_TIME) {
+                    !this.warpTimeUp(thread)) {
                     continue;
                 }
                 return;
@@ -266,7 +268,7 @@ class Sequencer {
                     // Unless we're in warp mode - then only return if the
                     // warp timer is up.
                     if (!isWarpMode ||
-                        thread.warpTimer.timeElapsed() > Sequencer.WARP_TIME) {
+                        this.warpTimeUp(thread)) {
                         // Don't do anything to the stack, since loops need
                         // to be re-executed.
                         return;
@@ -285,6 +287,33 @@ class Sequencer {
                 thread.goToNextBlock();
             }
         }
+    }
+
+    /**
+     * Whether a warp-mode thread has exceeded its warp time budget.
+     *
+     * The clock (Date.now via Timer) is only consulted every 32nd check until
+     * the thread is within the last 20% of the budget, then every time. This
+     * mirrors the compiled path's isStuck() counter (which checks every 100
+     * calls) and removes a per-block Date.now() from the interpreter hot loop
+     * while keeping warp yield granularity effectively unchanged.
+     * @param {!Thread} thread Thread in warp mode.
+     * @return {boolean} True if the warp time is up.
+     */
+    warpTimeUp (thread) {
+        const timer = thread.warpTimer;
+        if (thread.warpNearDeadline) {
+            return timer.timeElapsed() > Sequencer.WARP_TIME;
+        }
+        if (++thread.warpCheckCount >= 32) {
+            thread.warpCheckCount = 0;
+            const elapsed = timer.timeElapsed();
+            if (elapsed > Sequencer.WARP_TIME * 0.8) {
+                thread.warpNearDeadline = true;
+            }
+            return elapsed > Sequencer.WARP_TIME;
+        }
+        return false;
     }
 
     /**

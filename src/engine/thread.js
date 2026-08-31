@@ -196,6 +196,20 @@ class Thread {
          */
         this.warpTimer = null;
 
+        /**
+         * Warp-timer check counter for throttled clock reads (Sequencer.warpTimeUp).
+         * Declared here so Thread keeps a stable hidden class.
+         * @type {number}
+         */
+        this.warpCheckCount = 0;
+
+        /**
+         * True once the warp budget is nearly exhausted, after which the clock
+         * is consulted on every check (Sequencer.warpTimeUp).
+         * @type {boolean}
+         */
+        this.warpNearDeadline = false;
+
         this.justReported = null;
 
         this.triedToCompile = false;
