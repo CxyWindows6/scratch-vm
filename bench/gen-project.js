@@ -1,4 +1,3 @@
-'use strict';
 /**
  * Generates bench/quicksort.sb3 — a compute-bound benchmark project for scratch-vm.
  *
@@ -21,7 +20,21 @@ const JSZip = require('@turbowarp/jszip');
 
 const N = parseInt(process.argv[2] || process.env.BENCH_N || '1000000', 10);
 const MULT = 7919;
-function gcd (a, b) { while (b) { const t = b; b = a % b; a = t; } return a; }
+
+/**
+ * Compute the greatest common divisor.
+ * @param {number} a - first number.
+ * @param {number} b - second number.
+ * @returns {number} the greatest common divisor of a and b.
+ */
+const gcd = (a, b) => {
+    while (b) {
+        const t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+};
 if (gcd(MULT, N) !== 1) throw new Error(`multiplier ${MULT} not coprime with N=${N}`);
 
 // ---------------------------------------------------------------- block builder
@@ -29,7 +42,12 @@ let idCounter = 0;
 const uid = () => `q${(++idCounter).toString(36)}`;
 const blocks = {};
 
-function mk (opcode, opts = {}) {
+/** Build a block and register it in the global blocks table.
+ * @param {string} opcode - the block opcode.
+ * @param {object} opts - optional block properties.
+ * @returns {string} the new block id.
+ */
+const mk = (opcode, opts = {}) => {
     const id = uid();
     const b = {
         opcode,
@@ -47,16 +65,19 @@ function mk (opcode, opts = {}) {
     if (opts.mutation) b.mutation = opts.mutation;
     blocks[id] = b;
     return id;
-}
+};
 
-/** Link a sequence of block ids into a stack; returns the first id. */
-function chain (ids) {
+/** Link a sequence of block ids into a stack.
+ * @param {string[]} ids - block ids in execution order.
+ * @returns {string} the first block id.
+ */
+const chain = ids => {
     for (let i = 0; i < ids.length - 1; i++) {
         blocks[ids[i]].next = ids[i + 1];
         blocks[ids[i + 1]].parent = ids[i];
     }
     return ids[0];
-}
+};
 
 // input descriptors
 const inPrim = prim => [1, prim]; // unobscured shadow (primitive)
@@ -73,22 +94,46 @@ const gVar = name => inPrim(pVar(name, V[name]));
 const n = v => inPrim(pNum(v));
 
 // reporters
-const itemOf = (list, indexInput) => mk('data_itemoflist', {inputs: {INDEX: indexInput}, fields: {LIST: [list, L[list]]}});
+const itemOf = (list, indexInput) => mk('data_itemoflist', {
+    inputs: {INDEX: indexInput},
+    fields: {LIST: [list, L[list]]}
+});
 const lenOf = list => mk('data_lengthoflist', {fields: {LIST: [list, L[list]]}});
 const op2 = (opcode, a, b) => mk(opcode, {inputs: {OPERAND1: a, OPERAND2: b}});
 const ar2 = (opcode, a, b) => mk(opcode, {inputs: {NUM1: a, NUM2: b}});
 const lastMenu = () => mk('data_indexmenu', {fields: {INDEX: ['last']}, shadow: true});
 
 // commands
-const setVar = (name, valueInput) => mk('data_setvariableto', {inputs: {VALUE: valueInput}, fields: {VARIABLE: [name, V[name]]}});
-const changeVar = (name, valueInput) => mk('data_changevariableby', {inputs: {VALUE: valueInput}, fields: {VARIABLE: [name, V[name]]}});
-const addToList = (list, itemInput) => mk('data_addtolist', {inputs: {ITEM: itemInput}, fields: {LIST: [list, L[list]]}});
-const replaceItem = (list, indexInput, itemInput) => mk('data_replaceitemoflist', {inputs: {INDEX: indexInput, ITEM: itemInput}, fields: {LIST: [list, L[list]]}});
-const deleteOf = (list, indexInput) => mk('data_deleteoflist', {inputs: {INDEX: indexInput}, fields: {LIST: [list, L[list]]}});
+const setVar = (name, valueInput) => mk('data_setvariableto', {
+    inputs: {VALUE: valueInput},
+    fields: {VARIABLE: [name, V[name]]}
+});
+const changeVar = (name, valueInput) => mk('data_changevariableby', {
+    inputs: {VALUE: valueInput},
+    fields: {VARIABLE: [name, V[name]]}
+});
+const addToList = (list, itemInput) => mk('data_addtolist', {
+    inputs: {ITEM: itemInput},
+    fields: {LIST: [list, L[list]]}
+});
+const replaceItem = (list, indexInput, itemInput) => mk('data_replaceitemoflist', {
+    inputs: {INDEX: indexInput, ITEM: itemInput},
+    fields: {LIST: [list, L[list]]}
+});
+const deleteOf = (list, indexInput) => mk('data_deleteoflist', {
+    inputs: {INDEX: indexInput},
+    fields: {LIST: [list, L[list]]}
+});
 const deleteAll = list => mk('data_deletealloflist', {fields: {LIST: [list, L[list]]}});
-const repeat = (timesInput, substackId) => mk('control_repeat', {inputs: {TIMES: timesInput, SUBSTACK: inBlock(substackId)}});
-const whileDo = (condInput, substackId) => mk('control_while', {inputs: {CONDITION: condInput, SUBSTACK: inBlock(substackId)}});
-const ifDo = (condInput, substackId) => mk('control_if', {inputs: {CONDITION: condInput, SUBSTACK: inBlock(substackId)}});
+const repeat = (timesInput, substackId) => mk('control_repeat', {
+    inputs: {TIMES: timesInput, SUBSTACK: inBlock(substackId)}
+});
+const whileDo = (condInput, substackId) => mk('control_while', {
+    inputs: {CONDITION: condInput, SUBSTACK: inBlock(substackId)}
+});
+const ifDo = (condInput, substackId) => mk('control_if', {
+    inputs: {CONDITION: condInput, SUBSTACK: inBlock(substackId)}
+});
 const lt = (a, b) => inBlock(op2('operator_lt', a, b));
 const gt = (a, b) => inBlock(op2('operator_gt', a, b));
 
@@ -141,12 +186,18 @@ const mainLoop = whileDo(gt(inBlock(lenOf('stk')), n(0)), chain([
     partition
 ]));
 
-const verifyLoop = repeat(inBlock(ar2('operator_subtract', inBlock(lenOf('nums')), n(1))), chain([
-    changeVar('i', n(1)),
-    ifDo(gt(inBlock(itemOf('nums', gVar('i'))), inBlock(itemOf('nums', inBlock(ar2('operator_add', gVar('i'), n(1)))))), chain([
-        changeVar('bad', n(1))
-    ]))
-]));
+const verifyLoop = repeat(
+    inBlock(ar2('operator_subtract', inBlock(lenOf('nums')), n(1))),
+    chain([
+        changeVar('i', n(1)),
+        ifDo(gt(
+            inBlock(itemOf('nums', gVar('i'))),
+            inBlock(itemOf('nums', inBlock(ar2('operator_add', gVar('i'), n(1)))))
+        ), chain([
+            changeVar('bad', n(1))
+        ]))
+    ])
+);
 
 const body = chain([
     deleteAll('nums'),
@@ -178,7 +229,9 @@ const protoId = mk('procedures_prototype', {
 });
 const defId = mk('procedures_definition', {
     inputs: {custom_block: [1, protoId]},
-    topLevel: true, x: 400, y: 0
+    topLevel: true,
+    x: 400,
+    y: 0
 });
 blocks[body].parent = defId;
 blocks[defId].next = body;
@@ -199,7 +252,8 @@ blocks[callId].parent = hatId;
 // ---------------------------------------------------------------- stage + project
 // A tiny SVG costume; assetId = its real md5 so storage validation passes.
 const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
-const svgMd5 = crypto.createHash('md5').update(Buffer.from(svg)).digest('hex');
+const svgMd5 = crypto.createHash('md5').update(Buffer.from(svg))
+    .digest('hex');
 
 const stage = {
     isStage: true,

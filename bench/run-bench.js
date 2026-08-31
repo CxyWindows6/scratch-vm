@@ -1,4 +1,3 @@
-'use strict';
 /**
  * Headless compute benchmark runner for scratch-vm.
  *
@@ -23,7 +22,12 @@ const RUNS = parseInt(process.env.BENCH_RUNS || '5', 10);
 const WARP_TIMER = process.env.BENCH_WARP_TIMER !== '0';
 const TURBO = process.env.BENCH_TURBO !== '0';
 
-async function main () {
+/**
+ * Load the project, run the timed benchmark loop, verify each run and print
+ * the summary. Exits non-zero if any run fails verification.
+ * @returns {Promise<void>} resolves when the benchmark finishes.
+ */
+const main = async () => {
     const vm = new VM();
     vm.attachStorage(makeTestStorage());
     vm.setCompilerOptions({enabled: true, warpTimer: WARP_TIMER});
@@ -79,7 +83,10 @@ async function main () {
         if (process.env.BENCH_WALL) console.log(`  (wall ${wallMs.toFixed(1)}ms)`);
 
         const v = verify();
-        console.log(`run ${r + 1}: ${ms.toFixed(1)}ms steps=${steps} len=${v.len} mismatches=${v.bad} first=${v.first} last=${v.last}`);
+        console.log(
+            `run ${r + 1}: ${ms.toFixed(1)}ms steps=${steps} ` +
+            `len=${v.len} mismatches=${v.bad} first=${v.first} last=${v.last}`
+        );
         if (v.bad > 0) {
             console.error('SORT VERIFICATION FAILED');
             process.exitCode = 1;
@@ -97,9 +104,9 @@ async function main () {
         median: +sorted[Math.floor(sorted.length / 2)].toFixed(1),
         max: +sorted[sorted.length - 1].toFixed(1)
     };
-    console.log('SUMMARY ' + JSON.stringify(summary));
+    console.log(`SUMMARY ${JSON.stringify(summary)}`);
     vm.quit();
-}
+};
 
 main().catch(e => {
     console.error(e);
