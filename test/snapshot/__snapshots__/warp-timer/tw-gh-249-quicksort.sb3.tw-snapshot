@@ -95,11 +95,11 @@ b6.value = b5.value;
 b7.value = listGet(b1.value, b5.value);
 b8.value = (toNotNaN(+b5.value) + 1);
 for (var a1 = toNotNaN((toNotNaN(+p1) - toNotNaN(+b5.value))); a1 >= 0.5; a1--) {
-if (compareLessThan(listGet(b1.value, b8.value), b7.value)) {
-b7.value = listGet(b1.value, b8.value);
+if (compareLessThan((b1.value[(b8.value | 0) - 1] ?? ""), b7.value)) {
+b7.value = (b1.value[(b8.value | 0) - 1] ?? "");
 b6.value = b8.value;
 }
-b8.value = (toNotNaN(+b8.value) + 1);
+b8.value = (b8.value + 1);
 if (isStuck()) yield;
 }
 if (compareEqual(b6.value, b5.value)) {

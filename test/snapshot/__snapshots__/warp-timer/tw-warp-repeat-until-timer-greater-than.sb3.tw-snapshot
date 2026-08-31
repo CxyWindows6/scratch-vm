@@ -16,10 +16,10 @@ const b0 = stage.variables["F?*}X,`9XBpN_[piGRrz"];
 return function* genXYZ_run_without_screen_r () {
 b0.value = ((daysSince2000() * 86400) + 3);
 runtime.ioDevices.clock.resetProjectTimer();
-while (!((runtime.ioDevices.clock.projectTimer() > 0.1) || compareGreaterThan((daysSince2000() * 86400), b0.value))) {
+while (!((runtime.ioDevices.clock.projectTimer() > 0.1) || ((daysSince2000() * 86400) > b0.value))) {
 if (isStuck()) yield;
 }
-if (compareLessThan((daysSince2000() * 86400), b0.value)) {
+if (((daysSince2000() * 86400) < b0.value)) {
 runtime.ext_scratch3_looks._say("pass", target);
 }
 return "";
