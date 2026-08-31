@@ -269,6 +269,13 @@ class Runtime extends EventEmitter {
         this._hats = {};
 
         /**
+         * Cached list of edge-activated hat opcodes for the per-frame scan in
+         * _step(). Recomputed lazily; invalidated whenever _hats changes.
+         * @type {?Array.<string>}
+         */
+        this._edgeHatOpcodes = null;
+
+        /**
          * Map of opcode to information about whether the block's return value should be interpreted
          * for control flow purposes.
          * @type {Record<string, {conditional: boolean}>}
@@ -1011,6 +1018,7 @@ class Runtime extends EventEmitter {
                             this._hats[hatName] = packageHats[hatName];
                         }
                     }
+                    this._edgeHatOpcodes = null;
                 }
                 // Collect monitored from package.
                 if (packageObject.getMonitored) {
@@ -1177,6 +1185,7 @@ class Runtime extends EventEmitter {
                             edgeActivated: blockInfo.isEdgeActivated,
                             restartExistingThreads: blockInfo.shouldRestartExistingThreads
                         };
+                        this._edgeHatOpcodes = null;
                     } else if (blockInfo.blockType === BlockType.CONDITIONAL) {
                         this._flowing[opcode] = {
                             conditional: true,
@@ -2260,7 +2269,8 @@ class Runtime extends EventEmitter {
         }, optTarget);
         // For compatibility with Scratch 2, edge triggered hats need to be processed before
         // threads are stepped. See ScratchRuntime.as for original implementation
-        newThreads.forEach(thread => {
+        for (let i = 0; i < newThreads.length; i++) {
+            const thread = newThreads[i];
             if (thread.isCompiled) {
                 if (thread.executableHat) {
                     // It is quite likely that we are currently executing a block, so make sure
@@ -2273,7 +2283,7 @@ class Runtime extends EventEmitter {
                 execute(this.sequencer, thread);
                 thread.goToNextBlock();
             }
-        });
+        }
         return newThreads;
     }
 
@@ -2579,12 +2589,23 @@ class Runtime extends EventEmitter {
         }
 
         // Find all edge-activated hats, and add them to threads to be evaluated.
-        for (const hatType in this._hats) {
-            if (!Object.prototype.hasOwnProperty.call(this._hats, hatType)) continue;
-            const hat = this._hats[hatType];
-            if (hat.edgeActivated) {
-                this.startHats(hatType);
+        // The opcode list is cached (invalidated when _hats changes) so the
+        // per-frame path is a plain array loop instead of a for-in enumeration
+        // over every registered hat.
+        if (this._edgeHatOpcodes === null) {
+            const edgeHats = [];
+            for (const hatType in this._hats) {
+                if (!Object.prototype.hasOwnProperty.call(this._hats, hatType)) continue;
+                const hat = this._hats[hatType];
+                if (hat.edgeActivated) {
+                    edgeHats.push(hatType);
+                }
             }
+            this._edgeHatOpcodes = edgeHats;
+        }
+        const edgeHatOpcodes = this._edgeHatOpcodes;
+        for (let i = 0; i < edgeHatOpcodes.length; i++) {
+            this.startHats(edgeHatOpcodes[i]);
         }
         this.redrawRequested = false;
         this._pushMonitors();
@@ -2603,9 +2624,16 @@ class Runtime extends EventEmitter {
         this._updateGlows(doneThreads);
         // Add done threads so that even if a thread finishes within 1 frame, the green
         // flag will still indicate that a script ran.
-        this._emitProjectRunStatus(
-            this.threads.length + doneThreads.length -
-                this._getMonitorThreadCount([...this.threads, ...doneThreads]));
+        // Count non-monitor threads without allocating a concatenated
+        // snapshot array every frame.
+        let nonMonitorThreadCount = 0;
+        for (let i = 0; i < this.threads.length; i++) {
+            if (!this.threads[i].updateMonitor) nonMonitorThreadCount++;
+        }
+        for (let i = 0; i < doneThreads.length; i++) {
+            if (!doneThreads[i].updateMonitor) nonMonitorThreadCount++;
+        }
+        this._emitProjectRunStatus(nonMonitorThreadCount);
         // Store threads that completed this iteration for testing and other
         // internal purposes.
         this._lastStepDoneThreads = doneThreads;
