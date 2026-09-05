@@ -48,9 +48,11 @@ class Target extends EventEmitter {
         /**
          * Dictionary of variables and their values for this target.
          * Key is the variable id.
+         * Null-prototype so lookupVariableById can use a bare property read
+         * without risking prototype members (e.g. a variable id 'toString').
          * @type {Object.<string,*>}
          */
-        this.variables = {};
+        this.variables = Object.create(null);
         /**
          * Dictionary of comments for this target.
          * Key is the comment id.
@@ -193,14 +195,20 @@ class Target extends EventEmitter {
      */
     lookupVariableById (id) {
         // If we have a local copy, return it.
-        if (Object.prototype.hasOwnProperty.call(this.variables, id)) {
-            return this.variables[id];
+        // this.variables is a null-prototype dictionary (see constructor), so
+        // a bare read cannot return an inherited Object.prototype member.
+        const variable = this.variables[id];
+        if (variable) {
+            return variable;
         }
         // If the stage has a global copy, return it.
         if (this.runtime && !this.isStage) {
             const stage = this.runtime.getTargetForStage();
-            if (stage && Object.prototype.hasOwnProperty.call(stage.variables, id)) {
-                return stage.variables[id];
+            if (stage) {
+                const stageVariable = stage.variables[id];
+                if (stageVariable) {
+                    return stageVariable;
+                }
             }
         }
     }
@@ -456,7 +464,7 @@ class Target extends EventEmitter {
                 }
             }
             return accum;
-        }, {});
+        }, Object.create(null));
     }
 
     /**
