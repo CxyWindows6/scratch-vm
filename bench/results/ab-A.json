@@ -1,0 +1,49 @@
+{
+  "vmA": "bench\\results\\vm-head-pre.js",
+  "vmB": "dist\\node\\scratch-vm.js",
+  "pairs": 5,
+  "results": [
+    {
+      "workload": "w3-clone-storm",
+      "A": 1391,
+      "B": 500,
+      "ratio": 0.359,
+      "deltaPct": -64.1,
+      "runsA": [
+        2500,
+        1405,
+        1391,
+        1267,
+        906
+      ],
+      "runsB": [
+        1047,
+        500,
+        281,
+        452,
+        563
+      ]
+    },
+    {
+      "workload": "w1-many-sprites",
+      "A": 125,
+      "B": 109,
+      "ratio": 0.872,
+      "deltaPct": -12.8,
+      "runsA": [
+        125,
+        141,
+        78,
+        156,
+        109
+      ],
+      "runsB": [
+        94,
+        109,
+        141,
+        109,
+        62
+      ]
+    }
+  ]
+}

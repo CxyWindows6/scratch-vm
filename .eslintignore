@@ -3,3 +3,6 @@ dist/*
 node_modules/*
 playground/*
 benchmark/*
+bench/dist-profile/*
+bench/prof*/*
+bench/results/*

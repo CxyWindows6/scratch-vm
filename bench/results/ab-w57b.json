@@ -1,0 +1,57 @@
+{
+  "vmA": "bench\\results\\vm-head-pre.js",
+  "vmB": "dist\\node\\scratch-vm.js",
+  "pairs": 7,
+  "results": [
+    {
+      "workload": "w5-broadcast",
+      "A": 2344,
+      "B": 2266,
+      "ratio": 0.967,
+      "deltaPct": -3.3,
+      "runsA": [
+        2438,
+        2734,
+        2188,
+        2187,
+        2156,
+        2532,
+        2344
+      ],
+      "runsB": [
+        2468,
+        2266,
+        2266,
+        2203,
+        2249,
+        2296,
+        2047
+      ]
+    },
+    {
+      "workload": "w7-string-join",
+      "A": 453,
+      "B": 438,
+      "ratio": 0.967,
+      "deltaPct": -3.3,
+      "runsA": [
+        469,
+        453,
+        453,
+        453,
+        438,
+        438,
+        438
+      ],
+      "runsB": [
+        485,
+        469,
+        453,
+        437,
+        391,
+        438,
+        407
+      ]
+    }
+  ]
+}

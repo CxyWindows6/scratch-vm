@@ -1,0 +1,70 @@
+{
+  "vmA": "bench\\results\\vm-head-pre.js",
+  "vmB": "dist\\node\\scratch-vm.js",
+  "pairs": 5,
+  "results": [
+    {
+      "workload": "w2-interpreter",
+      "A": 2609,
+      "B": 2157,
+      "ratio": 0.827,
+      "deltaPct": -17.3,
+      "runsA": [
+        2610,
+        2546,
+        2781,
+        2485,
+        2609
+      ],
+      "runsB": [
+        2094,
+        2157,
+        2063,
+        2172,
+        2281
+      ]
+    },
+    {
+      "workload": "w1-many-sprites",
+      "A": 110,
+      "B": 109,
+      "ratio": 0.991,
+      "deltaPct": -0.9,
+      "runsA": [
+        109,
+        110,
+        156,
+        109,
+        125
+      ],
+      "runsB": [
+        79,
+        140,
+        125,
+        109,
+        78
+      ]
+    },
+    {
+      "workload": "w4-sensing-edge",
+      "A": 140,
+      "B": 156,
+      "ratio": 1.114,
+      "deltaPct": 11.4,
+      "runsA": [
+        110,
+        140,
+        219,
+        156,
+        140
+      ],
+      "runsB": [
+        157,
+        156,
+        202,
+        93,
+        94
+      ]
+    }
+  ]
+}

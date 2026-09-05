@@ -1,0 +1,28 @@
+{
+  "vmA": "bench\\results\\vm-head-pre.js",
+  "vmB": "dist\\node\\scratch-vm.js",
+  "pairs": 5,
+  "results": [
+    {
+      "workload": "w2-interpreter",
+      "A": 6234,
+      "B": 5641,
+      "ratio": 0.905,
+      "deltaPct": -9.5,
+      "runsA": [
+        6703,
+        6203,
+        6093,
+        6234,
+        6328
+      ],
+      "runsB": [
+        5641,
+        5829,
+        5563,
+        6187,
+        3907
+      ]
+    }
+  ]
+}

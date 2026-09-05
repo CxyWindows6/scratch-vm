@@ -1,0 +1,175 @@
+{
+  "vmA": "..\\acceptance-tooling\\worktrees\\tw-baseline\\dist\\node\\scratch-vm.js",
+  "vmB": "dist\\node\\scratch-vm.js",
+  "pairs": 5,
+  "results": [
+    {
+      "workload": "w1-many-sprites",
+      "A": 109,
+      "B": 125,
+      "ratio": 1.147,
+      "deltaPct": 14.7,
+      "runsA": [
+        141,
+        141,
+        94,
+        109,
+        94
+      ],
+      "runsB": [
+        156,
+        125,
+        125,
+        141,
+        79
+      ]
+    },
+    {
+      "workload": "w2-interpreter",
+      "A": 2938,
+      "B": 2282,
+      "ratio": 0.777,
+      "deltaPct": -22.3,
+      "runsA": [
+        3156,
+        2938,
+        3124,
+        2750,
+        2891
+      ],
+      "runsB": [
+        2313,
+        2594,
+        2282,
+        2046,
+        2250
+      ]
+    },
+    {
+      "workload": "w3-clone-storm",
+      "A": 485,
+      "B": 375,
+      "ratio": 0.773,
+      "deltaPct": -22.7,
+      "runsA": [
+        500,
+        578,
+        485,
+        422,
+        359
+      ],
+      "runsB": [
+        390,
+        391,
+        375,
+        282,
+        328
+      ]
+    },
+    {
+      "workload": "w4-sensing-edge",
+      "A": 109,
+      "B": 125,
+      "ratio": 1.147,
+      "deltaPct": 14.7,
+      "runsA": [
+        125,
+        109,
+        109,
+        78,
+        141
+      ],
+      "runsB": [
+        125,
+        78,
+        156,
+        172,
+        94
+      ]
+    },
+    {
+      "workload": "w4b-frame-overhead",
+      "A": 1891,
+      "B": 1579,
+      "ratio": 0.835,
+      "deltaPct": -16.5,
+      "runsA": [
+        2171,
+        1891,
+        1937,
+        1859,
+        1890
+      ],
+      "runsB": [
+        1845,
+        1563,
+        1579,
+        1485,
+        1687
+      ]
+    },
+    {
+      "workload": "w5-broadcast",
+      "A": 3204,
+      "B": 2703,
+      "ratio": 0.844,
+      "deltaPct": -15.6,
+      "runsA": [
+        3327,
+        3203,
+        3500,
+        3204,
+        3141
+      ],
+      "runsB": [
+        2703,
+        2766,
+        2953,
+        2562,
+        2062
+      ]
+    },
+    {
+      "workload": "w6-list-head",
+      "A": 110,
+      "B": 125,
+      "ratio": 1.136,
+      "deltaPct": 13.6,
+      "runsA": [
+        109,
+        156,
+        110,
+        78,
+        110
+      ],
+      "runsB": [
+        125,
+        125,
+        141,
+        140,
+        93
+      ]
+    },
+    {
+      "workload": "w7-string-join",
+      "A": 469,
+      "B": 438,
+      "ratio": 0.934,
+      "deltaPct": -6.6,
+      "runsA": [
+        469,
+        468,
+        469,
+        438,
+        485
+      ],
+      "runsB": [
+        469,
+        421,
+        453,
+        422,
+        438
+      ]
+    }
+  ]
+}

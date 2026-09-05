@@ -1,0 +1,49 @@
+{
+  "vmA": "bench\\results\\vm-head-pre.js",
+  "vmB": "dist\\node\\scratch-vm.js",
+  "pairs": 5,
+  "results": [
+    {
+      "workload": "w4b-frame-overhead",
+      "A": 3953,
+      "B": 4172,
+      "ratio": 1.055,
+      "deltaPct": 5.5,
+      "runsA": [
+        1999,
+        3172,
+        3953,
+        4579,
+        4359
+      ],
+      "runsB": [
+        2984,
+        2126,
+        4172,
+        4328,
+        4673
+      ]
+    },
+    {
+      "workload": "w5-broadcast",
+      "A": 828,
+      "B": 734,
+      "ratio": 0.886,
+      "deltaPct": -11.4,
+      "runsA": [
+        1126,
+        1078,
+        734,
+        625,
+        828
+      ],
+      "runsB": [
+        938,
+        719,
+        734,
+        921,
+        719
+      ]
+    }
+  ]
+}
