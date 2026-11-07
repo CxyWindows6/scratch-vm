@@ -1,4 +1,5 @@
-const {test} = require('tap');
+const {test} = require('node:test');
+const assert = require('node:assert');
 const VM = require('../../src/index.js');
 const {computeAlwaysNumericVariables, blockIsAlwaysNumeric} = require('../../src/compiler/numeric-variables.js');
 
@@ -134,32 +135,38 @@ const buildProject = () => {
     };
 };
 
-test('computeAlwaysNumericVariables classifies writes soundly', async t => {
+test('computeAlwaysNumericVariables classifies writes soundly', async () => {
     const vm = new VM();
     await vm.loadProject(buildProject());
     const numeric = computeAlwaysNumericVariables(vm.runtime);
 
-    t.ok(numeric.has('v-num'), 'never-written numeric-initial variable is numeric');
-    t.ok(numeric.has('v-chg'), 'change-by-number keeps variable numeric');
-    t.ok(numeric.has('v-arith'), 'set to arithmetic result is numeric');
-    t.notOk(numeric.has('v-str'), 'string initial value disqualifies');
-    t.notOk(numeric.has('v-setstr'), 'set to join (string) disqualifies');
-    t.notOk(numeric.has('v-list'), 'set to list item disqualifies');
-    t.notOk(numeric.has('v-cloud'), 'cloud variable is never numeric');
+    assert.ok(numeric.has('v-num'), 'never-written numeric-initial variable is numeric');
+    assert.ok(numeric.has('v-chg'), 'change-by-number keeps variable numeric');
+    assert.ok(numeric.has('v-arith'), 'set to arithmetic result is numeric');
+    assert.strictEqual(numeric.has('v-str'), false, 'string initial value disqualifies');
+    assert.strictEqual(numeric.has('v-setstr'), false, 'set to join (string) disqualifies');
+    assert.strictEqual(numeric.has('v-list'), false, 'set to list item disqualifies');
+    assert.strictEqual(numeric.has('v-cloud'), false, 'cloud variable is never numeric');
 
     vm.quit();
-    t.end();
 });
 
-test('blockIsAlwaysNumeric recognizes number-producing opcodes', t => {
-    t.ok(blockIsAlwaysNumeric({opcode: 'math_number', fields: {NUM: {value: 5}}}), 'number literal');
-    t.ok(blockIsAlwaysNumeric({opcode: 'math_number', fields: {NUM: {value: '5'}}}), 'numeric string literal');
-    t.notOk(blockIsAlwaysNumeric({opcode: 'math_number', fields: {NUM: {value: 'abc'}}}), 'non-numeric literal');
-    t.ok(blockIsAlwaysNumeric({opcode: 'operator_add', fields: {}}), 'addition is numeric');
-    t.ok(blockIsAlwaysNumeric({opcode: 'operator_mod', fields: {}}), 'mod is numeric');
-    t.ok(blockIsAlwaysNumeric({opcode: 'data_lengthoflist', fields: {}}), 'list length is numeric');
-    t.notOk(blockIsAlwaysNumeric({opcode: 'data_variable', fields: {}}), 'variable read is not provably numeric');
-    t.notOk(blockIsAlwaysNumeric({opcode: 'operator_join', fields: {}}), 'join is not numeric');
-    t.notOk(blockIsAlwaysNumeric(null), 'null is not numeric');
-    t.end();
+test('blockIsAlwaysNumeric recognizes number-producing opcodes', () => {
+    assert.ok(blockIsAlwaysNumeric({opcode: 'math_number', fields: {NUM: {value: 5}}}), 'number literal');
+    assert.ok(blockIsAlwaysNumeric({opcode: 'math_number', fields: {NUM: {value: '5'}}}), 'numeric string literal');
+    assert.strictEqual(
+        blockIsAlwaysNumeric({opcode: 'math_number', fields: {NUM: {value: 'abc'}}}),
+        false,
+        'non-numeric literal'
+    );
+    assert.ok(blockIsAlwaysNumeric({opcode: 'operator_add', fields: {}}), 'addition is numeric');
+    assert.ok(blockIsAlwaysNumeric({opcode: 'operator_mod', fields: {}}), 'mod is numeric');
+    assert.ok(blockIsAlwaysNumeric({opcode: 'data_lengthoflist', fields: {}}), 'list length is numeric');
+    assert.strictEqual(
+        blockIsAlwaysNumeric({opcode: 'data_variable', fields: {}}),
+        false,
+        'variable read is not provably numeric'
+    );
+    assert.strictEqual(blockIsAlwaysNumeric({opcode: 'operator_join', fields: {}}), false, 'join is not numeric');
+    assert.strictEqual(blockIsAlwaysNumeric(null), false, 'null is not numeric');
 });

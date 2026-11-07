@@ -1774,10 +1774,14 @@ class VirtualMachine extends EventEmitter {
             const id = messageIds[i];
             delete this.runtime.getTargetForStage().variables[id];
         }
-        const globalVarMap = Object.assign({}, this.runtime.getTargetForStage().variables);
+        // Copy into null-prototype dictionaries: a variable id of "__proto__"
+        // would otherwise hit the Object.prototype.__proto__ setter in
+        // Object.assign({}, variables) instead of becoming an own property,
+        // which would drop that variable from the generated XML.
+        const globalVarMap = Object.assign(Object.create(null), this.runtime.getTargetForStage().variables);
         const localVarMap = this.editingTarget.isStage ?
             Object.create(null) :
-            Object.assign({}, this.editingTarget.variables);
+            Object.assign(Object.create(null), this.editingTarget.variables);
 
         const globalVariables = Object.keys(globalVarMap).map(k => globalVarMap[k]);
         const localVariables = Object.keys(localVarMap).map(k => localVarMap[k]);

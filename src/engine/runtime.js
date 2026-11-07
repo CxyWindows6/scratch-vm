@@ -2311,7 +2311,15 @@ class Runtime extends EventEmitter {
             if (target.isOriginal) target.deleteMonitors();
         });
 
-        this.targets.map(this.disposeTarget, this);
+        // Repeatedly dispose of the first target: disposeTarget() removes the
+        // target from this array in place, so iterating with map()/forEach()
+        // would visit every other target (each splice shifts the remaining
+        // elements down while the iterator keeps advancing). Popping from the
+        // front is O(n) per call but allocates no new array, and dispose() is
+        // not a hot path.
+        while (this.targets.length > 0) {
+            this.disposeTarget(this.targets[0]);
+        }
         this.extensionStorage = {};
         // tw: explicitly emit a MONITORS_UPDATE instead of relying on implicit behavior of _step()
         if (!this._monitorState.empty()) {
@@ -2453,14 +2461,20 @@ class Runtime extends EventEmitter {
      */
     disposeTarget (disposingTarget) {
         // In-place removal: filter() allocated a fresh array on every dispose,
-        // which is O(targets) garbage for clone storms.
-        const index = this.targets.indexOf(disposingTarget);
-        if (index !== -1) {
+        // which is O(targets) garbage for clone storms. Do not go back to
+        // filter()/map() here: callers such as dispose() iterate this.targets
+        // while this method mutates it, so any iteration that keeps its own
+        // cursor would skip every other target.
+        const oldIndex = this.targets.indexOf(disposingTarget);
+        if (oldIndex > -1) {
             // Allow target to do dispose actions.
             disposingTarget.dispose();
             // Remove from list of targets.
-            this.targets.splice(index, 1);
+            this.targets.splice(oldIndex, 1);
         }
+        // The bookkeeping below is deliberately independent of the removal
+        // above: a target that is not in this.targets still has to have its
+        // cached stage pointer dropped, and the name cache is stale either way.
         if (this._stageTarget === disposingTarget) {
             this._stageTarget = null;
         }

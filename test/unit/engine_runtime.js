@@ -256,3 +256,91 @@ test('Clock is reset on runtime dispose', () => {
     // When the runtime is disposed, the clock should be reset
     assert.ok(c.projectTimer() === 0);
 });
+
+/**
+ * Build a mock target that is just complete enough to survive Runtime.dispose().
+ * dispose() calls stopAll() first, which emits PROJECT_STOP_ALL; the looks,
+ * sound and sensing block packages handle that event and read target custom
+ * state plus target.sprite.soundBank, so a bare {dispose()} stub would throw
+ * before the target list was ever touched.
+ * @param {object} options Options for the mock.
+ * @param {string} options.id Id of the mock target.
+ * @param {boolean} [options.isStage] Whether the mock is the stage.
+ * @param {boolean} [options.isOriginal] Whether the mock is an original target.
+ * @returns {object} The mock target, with a disposeCalls counter.
+ */
+const makeMockTarget = ({id, isStage = false, isOriginal = true}) => {
+    const customState = Object.create(null);
+    const target = {
+        id,
+        isStage,
+        isOriginal,
+        disposeCalls: 0,
+        onTargetVisualChange: null,
+        sprite: {
+            name: id,
+            soundBank: null,
+            sounds: [],
+            costumes: []
+        },
+        getCustomState: key => customState[key],
+        setCustomState: (key, value) => {
+            customState[key] = value;
+        },
+        onStopAll: () => {},
+        deleteMonitors: () => {},
+        dispose: () => {
+            target.disposeCalls++;
+        }
+    };
+    return target;
+};
+
+test('Disposing the runtime disposes every target exactly once', () => {
+    // Regression test: Runtime.dispose() used to iterate this.targets with
+    // map() while disposeTarget() spliced the same array in place, so every
+    // other target was skipped (N=5 left [1, 3] behind).
+    const counts = [1, 2, 5, 6, 10];
+    for (let c = 0; c < counts.length; c++) {
+        const n = counts[c];
+        const rt = new Runtime();
+        const targets = [];
+        for (let i = 0; i < n; i++) {
+            targets.push(makeMockTarget({id: `target${i}`}));
+        }
+        rt.targets = targets.slice();
+        rt.executableTargets = targets.slice();
+
+        assert.doesNotThrow(() => rt.dispose());
+        assert.strictEqual(rt.targets.length, 0, `all ${n} targets removed from runtime.targets`);
+        for (let i = 0; i < n; i++) {
+            assert.strictEqual(targets[i].disposeCalls, 1, `target ${i} of ${n} disposed exactly once`);
+        }
+    }
+});
+
+test('Disposing the runtime clears the cached stage target', () => {
+    const rt = new Runtime();
+    const stage = makeMockTarget({id: 'stage', isStage: true});
+    const sprite = makeMockTarget({id: 'sprite'});
+    rt.targets = [sprite, stage];
+    rt.executableTargets = [sprite, stage];
+    assert.strictEqual(rt.getTargetForStage(), stage, 'stage target is cached');
+
+    assert.doesNotThrow(() => rt.dispose());
+    assert.strictEqual(rt.targets.length, 0, 'all targets removed');
+    assert.strictEqual(rt._stageTarget, null, 'cached stage target was cleared');
+    assert.strictEqual(stage.disposeCalls, 1, 'stage target disposed exactly once');
+    assert.strictEqual(sprite.disposeCalls, 1, 'sprite target disposed exactly once');
+});
+
+test('disposeTarget clears the cached stage target even when it is not in runtime.targets', () => {
+    const rt = new Runtime();
+    const stage = makeMockTarget({id: 'stage', isStage: true});
+    rt._stageTarget = stage;
+
+    rt.disposeTarget(stage);
+
+    assert.strictEqual(rt._stageTarget, null, 'cached stage target was cleared');
+    assert.strictEqual(stage.disposeCalls, 0, 'a target that is not tracked is not disposed');
+});

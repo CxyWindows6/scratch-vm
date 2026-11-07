@@ -174,6 +174,79 @@ test('stepToProcedure', () => {
     
 });
 
+// A minimal stand-in for a warp-mode Thread, just enough for warpTimeUp:
+// it only reads warpTimer.timeElapsed(), warpCheckCount and warpNearDeadline.
+const makeWarpThread = function () {
+    const state = {elapsed: 0, reads: 0};
+    return {
+        state: state,
+        warpTimer: {
+            timeElapsed: () => {
+                state.reads++;
+                return state.elapsed;
+            }
+        },
+        warpCheckCount: 0,
+        warpNearDeadline: false
+    };
+};
+
+test('warpTimeUp throttles clock reads', () => {
+    const r = new Runtime();
+    const s = new Sequencer(r);
+    const th = makeWarpThread();
+
+    // (a) The first 31 checks never touch the clock.
+    for (let i = 1; i < 32; i++) {
+        assert.strictEqual(s.warpTimeUp(th), false, `check ${i} is not time up`);
+        assert.strictEqual(th.state.reads, 0, `check ${i} does not read the clock`);
+        assert.strictEqual(th.warpCheckCount, i, 'check count advances');
+    }
+    assert.strictEqual(th.warpNearDeadline, false, 'still far from the deadline');
+
+    // (b) The 32nd check reads the clock exactly once.
+    th.state.elapsed = 100;
+    assert.strictEqual(s.warpTimeUp(th), false, '32nd check is not time up');
+    assert.strictEqual(th.state.reads, 1, '32nd check reads the clock once');
+    assert.strictEqual(th.warpCheckCount, 0, 'check count wraps');
+
+    // (c) Reading past 80% of the budget latches warpNearDeadline, and from
+    // then on every check reads the clock.
+    th.state.elapsed = 401;
+    for (let i = 1; i < 32; i++) {
+        s.warpTimeUp(th);
+    }
+    assert.strictEqual(th.state.reads, 1, 'only the 32nd check read the clock again');
+    assert.strictEqual(s.warpTimeUp(th), false, 'just past 80% is not time up');
+    assert.strictEqual(th.warpNearDeadline, true, 'near-deadline latch is set');
+    assert.strictEqual(th.state.reads, 2, 'the latching check read the clock');
+
+    const readsBefore = th.state.reads;
+    for (let i = 0; i < 10; i++) {
+        s.warpTimeUp(th);
+    }
+    assert.strictEqual(th.state.reads, readsBefore + 10, 'every check reads the clock after latching');
+
+    // (d) Past the budget, the throttled check reports time up.
+    th.state.elapsed = 501;
+    assert.strictEqual(s.warpTimeUp(th), true, 'past the budget is time up');
+    assert.strictEqual(th.warpCheckCount, 0, 'the near-deadline path skips the counter');
+
+    // (e) Under the budget it does not.
+    th.state.elapsed = 500;
+    assert.strictEqual(s.warpTimeUp(th), false, 'exactly at the budget is not time up');
+
+    // A fresh thread that reaches the deadline on a sampled check also returns
+    // true immediately, without needing the latch first.
+    const th2 = makeWarpThread();
+    th2.state.elapsed = 5000;
+    for (let i = 1; i < 32; i++) {
+        assert.strictEqual(s.warpTimeUp(th2), false, `throttled check ${i} stays false`);
+    }
+    assert.strictEqual(s.warpTimeUp(th2), true, 'sampled check reports a blown budget');
+
+});
+
 test('stepThreads', () => {
     const r = new Runtime();
     r.currentStepTime = Infinity;

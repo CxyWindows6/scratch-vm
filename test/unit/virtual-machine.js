@@ -1003,3 +1003,95 @@ test('clearFlyoutBlocks removes all of the flyout blocks', () => {
     vm.clearFlyoutBlocks();
     assert.strictEqual(Object.keys(flyoutBlocks._blocks).length, 0);
 });
+
+test('deleteSprite disposes every clone of the sprite', () => {
+    // Regression test: the loop used to run forwards over sprite.clones while
+    // disposing a clone removes it from that same array (RenderedTarget.dispose
+    // -> Sprite.removeClone -> splice), so every other clone survived.
+    const cloneCounts = [1, 2, 5, 6];
+    for (let c = 0; c < cloneCounts.length; c++) {
+        const cloneCount = cloneCounts[c];
+        const vm = new VirtualMachine();
+        const spr = new Sprite(null, vm.runtime);
+        const original = spr.createClone();
+        const clones = [original];
+        for (let i = 0; i < cloneCount - 1; i++) {
+            clones.push(original.makeClone());
+        }
+        vm.runtime.targets = clones.slice();
+        vm.runtime.executableTargets = clones.slice();
+        vm.editingTarget = original;
+        vm.emitTargetsUpdate = () => {};
+        vm.emitWorkspaceUpdate = () => {};
+
+        assert.strictEqual(spr.clones.length, cloneCount, `sprite has ${cloneCount} clones before delete`);
+        vm.deleteSprite(original.id);
+        assert.strictEqual(spr.clones.length, 0, `all ${cloneCount} clones removed from the sprite`);
+        assert.strictEqual(vm.runtime.targets.length, 0, `all ${cloneCount} targets removed from the runtime`);
+        assert.strictEqual(vm.runtime.executableTargets.length, 0, 'executable targets were cleaned up too');
+    }
+});
+
+test('emitWorkspaceUpdate includes variables whose id is __proto__', () => {
+    const vm = new VirtualMachine();
+    const blocksToXML = () => '';
+    // Define __proto__ as an own data property instead of assigning it: the
+    // assignment syntax is exactly the setter that the old Object.assign({})
+    // copy tripped over, and eslint forbids it (no-proto).
+    const defineVariable = (dict, id, name) => Object.defineProperty(dict, id, {
+        value: new Variable(id, name, Variable.SCALAR_TYPE),
+        enumerable: true,
+        writable: true,
+        configurable: true
+    });
+    const globalVariables = Object.create(null);
+    defineVariable(globalVariables, '__proto__', 'globalProto');
+    globalVariables.toString = new Variable('toString', 'globalToString', Variable.SCALAR_TYPE);
+    const localVariables = Object.create(null);
+    defineVariable(localVariables, '__proto__', 'localProto');
+    localVariables.toString = new Variable('toString', 'localToString', Variable.SCALAR_TYPE);
+
+    vm.runtime.targets = [
+        {
+            id: 'stage',
+            isStage: true,
+            variables: globalVariables,
+            blocks: {
+                _blocks: {},
+                toXML: blocksToXML
+            },
+            comments: {}
+        }, {
+            id: 'sprite',
+            isStage: false,
+            variables: localVariables,
+            blocks: {
+                _blocks: {},
+                toXML: blocksToXML
+            },
+            comments: {}
+        }
+    ];
+    vm.editingTarget = vm.runtime.targets[1];
+
+    let xml = null;
+    vm.emit = (event, data) => (xml = data.xml);
+    vm.emitWorkspaceUpdate();
+
+    assert.notStrictEqual(xml.indexOf('globalProto'), -1, 'global __proto__ variable is in the XML');
+    assert.notStrictEqual(xml.indexOf('globalToString'), -1, 'global toString variable is in the XML');
+    assert.notStrictEqual(xml.indexOf('localProto'), -1, 'local __proto__ variable is in the XML');
+    assert.notStrictEqual(xml.indexOf('localToString'), -1, 'local toString variable is in the XML');
+    assert.notStrictEqual(xml.indexOf('id="__proto__"'), -1, 'the __proto__ variable id is preserved in the XML');
+    assert.notStrictEqual(xml.indexOf('id="toString"'), -1, 'the toString variable id is preserved in the XML');
+    assert.strictEqual(
+        Object.getPrototypeOf({}),
+        Object.prototype,
+        'Object.prototype is still the prototype of plain objects'
+    );
+    assert.strictEqual(
+        Object.prototype.hasOwnProperty.call({}, '__proto__'),
+        false,
+        'plain objects still have no own __proto__'
+    );
+});
