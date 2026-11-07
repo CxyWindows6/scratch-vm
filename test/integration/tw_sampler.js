@@ -36,6 +36,14 @@ const setup = async () => {
     return {vm, moves, draws};
 };
 
+// This fork draws from its frame loop (tw-frame-loop.js _drawAfterStep) instead of from
+// Runtime._step(), so a direct _step() call has to be followed by the frame loop's draw for
+// renderer samples to be observable. The sampler assertions themselves are unchanged.
+const stepOnce = vm => {
+    vm.runtime._step();
+    vm.runtime.frameLoop._drawAfterStep();
+};
+
 test('blockToLocation is stable and per-sprite', () => {
     const sampler = new Sampler(null);
     const a = sampler.blockToLocation('sprite1', 'block1');
@@ -55,7 +63,7 @@ test('blockToLocation is stable and per-sprite', () => {
 test('disabled by default', async () => {
     const {vm, moves, draws} = await setup();
     vm.greenFlag();
-    vm.runtime._step();
+    stepOnce(vm);
     assert.strictEqual(vm.runtime.sampler.pc, null);
     assert.deepStrictEqual(moves, [null, null]);
     assert.deepStrictEqual(draws, [null]);
@@ -66,7 +74,7 @@ test('basic level attributes compiled scripts to RUNTIME', async () => {
     const {vm, moves, draws} = await setup();
     vm.runtime.sampler.setEnabled(Sampler.LEVEL_BASIC);
     vm.greenFlag();
-    vm.runtime._step();
+    stepOnce(vm);
     assert.ok(vm.runtime.threads[0].isCompiled);
     assert.deepStrictEqual(moves, [Sampler.RUNTIME, Sampler.RUNTIME]);
     assert.deepStrictEqual(draws, [Sampler.RENDERER]);
@@ -80,7 +88,7 @@ test('commands level attributes compiled scripts to blocks', async () => {
     sampler.setEnabled(Sampler.LEVEL_COMMANDS);
     vm.greenFlag();
 
-    vm.runtime._step();
+    stepOnce(vm);
     assert.ok(vm.runtime.threads[0].isCompiled);
     const spriteId = vm.runtime.getSpriteTargetByName('Sprite1').id;
     const changeOnce = sampler.blockToLocation(spriteId, 'b');
@@ -90,7 +98,7 @@ test('commands level attributes compiled scripts to blocks', async () => {
     assert.strictEqual(sampler.pc[0], Sampler.IDLE);
 
     // After resuming from the loop's yield
-    vm.runtime._step();
+    stepOnce(vm);
     assert.deepStrictEqual(moves, [changeOnce, changeInLoop, changeInLoop]);
     assert.deepStrictEqual(draws, [Sampler.RENDERER, Sampler.RENDERER]);
     assert.strictEqual(sampler.pc[0], Sampler.IDLE);
@@ -106,7 +114,7 @@ test('setEnabled(0) turns sampling back off', async () => {
     // pc is kept around but no longer written to
     vm.runtime.sampler.pc[0] = 1234;
     vm.greenFlag();
-    vm.runtime._step();
+    stepOnce(vm);
     assert.deepStrictEqual(moves, [1234, 1234]);
     assert.deepStrictEqual(draws, [1234]);
     assert.strictEqual(vm.runtime.sampler.locations.length, 0);

@@ -6,6 +6,8 @@
 // while preventing runaway accumulation when a single _step() takes longer than stepTime.
 const MAX_STEPS_PER_FRAME = 1000;
 
+const Sampler = require('./tw-sampler.js');
+
 let rendererDrawProfilerId = -1;
 
 const _requestAnimationFrame = typeof requestAnimationFrame === 'function' ?
@@ -131,7 +133,14 @@ class FrameLoop {
             runtime.profiler.start(rendererDrawProfilerId);
         }
         if (typeof document === 'undefined' || !document.hidden) {
+            // tw: attribute the draw to the sampler's RENDERER bucket. Upstream does this in
+            // Runtime._step's draw block; this fork draws from the frame loop instead (see
+            // stepCallback), so the attribution has to happen here or the sampler would never
+            // report renderer time.
+            const sampler = runtime.sampler;
+            if (sampler.enableBasic) sampler.pc[0] = Sampler.RENDERER;
             runtime.renderer.draw();
+            if (sampler.enableBasic) sampler.pc[0] = Sampler.IDLE;
         }
         if (runtime.profiler !== null) {
             runtime.profiler.stop();
